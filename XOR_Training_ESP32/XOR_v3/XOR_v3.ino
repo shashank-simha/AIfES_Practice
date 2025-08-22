@@ -1,32 +1,30 @@
 #include <aifes.h>
+#include <esp_heap_caps.h>
 
-#define DATASETS 4
-#define FNN_3_LAYERS 3
-#define INPUT_SIZE 2
-#define HIDDEN_SIZE 3
-#define OUTPUT_SIZE 1
-#define PRINT_INTERVAL 10
+#define DATASETS 4        // Number of XOR samples
+#define FNN_3_LAYERS 3    // Neural network layers: input, hidden, output
+#define INPUT_SIZE 2      // Input neurons (XOR inputs)
+#define HIDDEN_SIZE 3     // Hidden layer neurons
+#define OUTPUT_SIZE 1     // Output neurons (XOR output)
+#define PRINT_INTERVAL 10 // Epochs between loss prints
 
-uint32_t global_epoch_counter = 0;
+// Model globals for persistence across train, test, infer
+float *flat_weights;                           // Network weights in PSRAM
+AIFES_E_model_parameter_fnn_f32 fnn;          // AIfES-Express model struct
+uint32_t fnn_structure[FNN_3_LAYERS] = {INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE}; // Layer sizes
+AIFES_E_activations fnn_activations[FNN_3_LAYERS - 1]; // Activations (sigmoid)
 
-const float input_data[DATASETS][INPUT_SIZE] = {
-  { 0.0f, 0.0f }, { 0.0f, 1.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }
+// Training data in PROGMEM
+const float train_input_data[DATASETS][INPUT_SIZE] PROGMEM = {
+  {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}
 };
-const float target_data[DATASETS][OUTPUT_SIZE] = {
-  { 0.0f }, { 1.0f }, { 1.0f }, { 0.0f }
+const float train_target_data[DATASETS][OUTPUT_SIZE] PROGMEM = {
+  {0.0f}, {1.0f}, {1.0f}, {0.0f}
 };
 
-float *output_data;
-float *flat_weights;
-aitensor_t input_tensor, target_tensor, output_tensor;
-AIFES_E_model_parameter_fnn_f32 fnn;
+uint32_t global_epoch_counter = 0; // Tracks epochs for loss printing
 
-uint32_t fnn_structure[FNN_3_LAYERS] = { INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE };
-uint16_t input_shape[] = { DATASETS, INPUT_SIZE };
-uint16_t target_shape[] = { DATASETS, OUTPUT_SIZE };
-uint16_t output_shape[] = { DATASETS, OUTPUT_SIZE };
-AIFES_E_activations fnn_activations[FNN_3_LAYERS - 1];
-
+// Print loss during training
 void printLoss(float loss) {
   global_epoch_counter++;
   Serial.print(F("Epoch: "));
@@ -35,29 +33,64 @@ void printLoss(float loss) {
   Serial.println(loss, 5);
 }
 
+// Initialize neural network model
 void init_model() {
-  Serial.println("Initializing model...");
-  input_tensor = AITENSOR_2D_F32(input_shape, input_data);
-  target_tensor = AITENSOR_2D_F32(target_shape, target_data);
-  output_data = (float *)malloc(DATASETS * OUTPUT_SIZE * sizeof(float));
-  output_tensor = AITENSOR_2D_F32(output_shape, output_data);
+  Serial.println(F("Initializing model..."));
 
+  // Set sigmoid activations for hidden and output layers
   fnn_activations[0] = AIfES_E_sigmoid;
   fnn_activations[1] = AIfES_E_sigmoid;
 
+  // Calculate and allocate weights in PSRAM
   uint32_t weight_number = AIFES_E_flat_weights_number_fnn_f32(fnn_structure, FNN_3_LAYERS);
-  flat_weights = (float *)malloc(weight_number * sizeof(float));
+  flat_weights = (float *)ps_malloc(weight_number * sizeof(float));
+  if (!flat_weights) {
+    Serial.println(F("Weight allocation failed"));
+    while (1);
+  }
 
+  // Configure AIfES-Express model
   fnn.layer_count = FNN_3_LAYERS;
   fnn.fnn_structure = fnn_structure;
   fnn.fnn_activations = fnn_activations;
   fnn.flat_weights = flat_weights;
+
+  Serial.println(F("Model initialized"));
 }
 
+// Train the neural network
 void train() {
-  Serial.println("Training...");
+  Serial.println(F("Training..."));
   global_epoch_counter = 0;
 
+  // Local data in PSRAM (copied from PROGMEM)
+  float *train_input_data_psram = (float *)ps_malloc(DATASETS * INPUT_SIZE * sizeof(float));
+  float *train_target_data_psram = (float *)ps_malloc(DATASETS * OUTPUT_SIZE * sizeof(float));
+  if (!train_input_data_psram || !train_target_data_psram) {
+    Serial.println(F("Data allocation failed"));
+    while (1);
+  }
+  for (uint32_t i = 0; i < DATASETS; i++) {
+    for (uint32_t j = 0; j < INPUT_SIZE; j++) {
+      train_input_data_psram[i * INPUT_SIZE + j] = pgm_read_float(&train_input_data[i][j]);
+    }
+    train_target_data_psram[i] = pgm_read_float(&train_target_data[i][0]);
+  }
+
+  // Local tensors
+  uint16_t train_input_shape[] = {DATASETS, INPUT_SIZE};
+  aitensor_t train_input_tensor = AITENSOR_2D_F32(train_input_shape, train_input_data_psram);
+  uint16_t train_target_shape[] = {DATASETS, OUTPUT_SIZE};
+  aitensor_t train_target_tensor = AITENSOR_2D_F32(train_target_shape, train_target_data_psram);
+  float *train_output_data = (float *)ps_malloc(DATASETS * OUTPUT_SIZE * sizeof(float));
+  if (!train_output_data) {
+    Serial.println(F("Output allocation failed"));
+    while (1);
+  }
+  uint16_t train_output_shape[] = {DATASETS, OUTPUT_SIZE};
+  aitensor_t train_output_tensor = AITENSOR_2D_F32(train_output_shape, train_output_data);
+
+  // Training parameters
   AIFES_E_init_weights_parameter_fnn_f32 init_weights;
   init_weights.init_weights_method = AIfES_E_init_uniform;
   init_weights.min_init_uniform = -2.0f;
@@ -69,24 +102,32 @@ void train() {
   train_params.learn_rate = 0.05f;
   train_params.sgd_momentum = 0.0f;
   train_params.batch_size = DATASETS;
-  train_params.epochs = 10000;
+  train_params.epochs = 1000;
   train_params.epochs_loss_print_interval = PRINT_INTERVAL;
   train_params.loss_print_function = printLoss;
   train_params.early_stopping = AIfES_E_early_stopping_on;
   train_params.early_stopping_target_loss = 0.004f;
 
-  int8_t error = AIFES_E_training_fnn_f32(&input_tensor, &target_tensor, &fnn, &train_params, &init_weights, &output_tensor);
+  // Train model
+  int8_t error = AIFES_E_training_fnn_f32(&train_input_tensor, &train_target_tensor, &fnn, &train_params, &init_weights, &train_output_tensor);
   error_handling_training(error);
+
+  // Clean up
+  free(train_input_data_psram);
+  free(train_target_data_psram);
+  free(train_output_data);
+
   test();
 }
 
+// Run inference on a single input
 void infer() {
-  Serial.println("Inferring...");
-  float single_input[1][INPUT_SIZE] = { { 0.0f, 0.0f } };  // Example input
-  uint16_t single_input_shape[] = { 1, INPUT_SIZE };
+  Serial.println(F("Inferring..."));
+  float single_input[1][INPUT_SIZE] = {{0.0f, 0.0f}}; // Example input
+  uint16_t single_input_shape[] = {1, INPUT_SIZE};
   aitensor_t single_input_tensor = AITENSOR_2D_F32(single_input_shape, (float *)single_input);
   float single_output[1];
-  uint16_t single_output_shape[] = { 1, OUTPUT_SIZE };
+  uint16_t single_output_shape[] = {1, OUTPUT_SIZE};
   aitensor_t single_output_tensor = AITENSOR_2D_F32(single_output_shape, single_output);
   int8_t error = AIFES_E_inference_fnn_f32(&single_input_tensor, &fnn, &single_output_tensor);
   error_handling_inference(error);
@@ -94,45 +135,86 @@ void infer() {
   Serial.println(single_output[0] >= 0.5f ? 1 : 0);
 }
 
+// Test model accuracy
 void test() {
-  Serial.println("Testing...");
-  int8_t error = AIFES_E_inference_fnn_f32(&input_tensor, &fnn, &output_tensor);
+  Serial.println(F("Testing..."));
+  // Local data in PSRAM (copied from PROGMEM)
+  float *test_input_data_psram = (float *)ps_malloc(DATASETS * INPUT_SIZE * sizeof(float));
+  float *test_target_data_psram = (float *)ps_malloc(DATASETS * OUTPUT_SIZE * sizeof(float));
+  if (!test_input_data_psram || !test_target_data_psram) {
+    Serial.println(F("Data allocation failed"));
+    while (1);
+  }
+  for (uint32_t i = 0; i < DATASETS; i++) {
+    for (uint32_t j = 0; j < INPUT_SIZE; j++) {
+      test_input_data_psram[i * INPUT_SIZE + j] = pgm_read_float(&train_input_data[i][j]);
+    }
+    test_target_data_psram[i] = pgm_read_float(&train_target_data[i][0]);
+  }
+
+  // Local tensors
+  uint16_t test_input_shape[] = {DATASETS, INPUT_SIZE};
+  aitensor_t test_input_tensor = AITENSOR_2D_F32(test_input_shape, test_input_data_psram);
+  uint16_t test_target_shape[] = {DATASETS, OUTPUT_SIZE};
+  aitensor_t test_target_tensor = AITENSOR_2D_F32(test_target_shape, test_target_data_psram);
+  float *test_output_data = (float *)ps_malloc(DATASETS * OUTPUT_SIZE * sizeof(float));
+  if (!test_output_data) {
+    Serial.println(F("Output allocation failed"));
+    while (1);
+  }
+  uint16_t test_output_shape[] = {DATASETS, OUTPUT_SIZE};
+  aitensor_t test_output_tensor = AITENSOR_2D_F32(test_output_shape, test_output_data);
+
+  // Run inference
+  int8_t error = AIFES_E_inference_fnn_f32(&test_input_tensor, &fnn, &test_output_tensor);
   error_handling_inference(error);
 
-  // -------------------------------- print the results ----------------------------------
+  // Print results
   Serial.println(F(""));
   Serial.println(F("Results:"));
   Serial.println(F("input 1:\tinput 2:\treal output:\tcalculated output:"));
-
   uint32_t correct = 0;
   for (uint32_t i = 0; i < DATASETS; i++) {
-    Serial.print(input_data[i][0]);
+    Serial.print(test_input_data_psram[i * INPUT_SIZE]);
     Serial.print(F("\t\t"));
-    Serial.print(input_data[i][1]);
+    Serial.print(test_input_data_psram[i * INPUT_SIZE + 1]);
     Serial.print(F("\t\t"));
-    Serial.print(target_data[i][0]);
+    Serial.print(test_target_data_psram[i]);
     Serial.print(F("\t\t"));
-    Serial.println(output_data[i], 5);
-
-    int pred = output_data[i] >= 0.5f ? 1 : 0;
-    int true_label = pgm_read_float(&target_data[i][0]) >= 0.5f ? 1 : 0;
+    Serial.println(test_output_data[i], 5);
+    int pred = test_output_data[i] >= 0.5f ? 1 : 0;
+    int true_label = test_target_data_psram[i] >= 0.5f ? 1 : 0;
     if (pred == true_label) correct++;
   }
   float accuracy = (float)correct / DATASETS * 100.0f;
   Serial.print(F("Accuracy: "));
   Serial.print(accuracy, 2);
   Serial.println(F("%"));
+
+  // Clean up
+  free(test_input_data_psram);
+  free(test_target_data_psram);
+  free(test_output_data);
 }
 
+// Setup function with PSRAM check
 void setup() {
   Serial.begin(115200);
-  while (!Serial)
-    ;
+  while (!Serial);
+
+  // Check PSRAM initialization
+  if (!psramInit()) {
+    Serial.println(F("PSRAM initialization failed"));
+    while (1);
+  }
+  Serial.println(F("PSRAM initialized"));
+
   srand(analogRead(A5));
   init_model();
-  Serial.println("Type >train< or >infer<");
+  Serial.println(F("Type >train< or >infer<"));
 }
 
+// Main loop for command input
 void loop() {
   if (Serial.available() > 0) {
     String str = Serial.readString();
@@ -141,11 +223,12 @@ void loop() {
     } else if (str.indexOf("infer") > -1) {
       infer();
     } else {
-      Serial.println("Unknown command");
+      Serial.println(F("Unknown command"));
     }
   }
 }
 
+// Handle training errors
 void error_handling_training(int8_t error_nr) {
   switch (error_nr) {
     case 0: break;
@@ -166,6 +249,7 @@ void error_handling_training(int8_t error_nr) {
   }
 }
 
+// Handle inference errors
 void error_handling_inference(int8_t error_nr) {
   switch (error_nr) {
     case 0: break;
