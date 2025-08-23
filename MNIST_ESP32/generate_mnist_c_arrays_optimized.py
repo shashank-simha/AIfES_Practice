@@ -2,8 +2,8 @@ import numpy as np
 from keras.datasets import mnist
 
 # Configuration
-NUM_TRAIN = 10  # Number of training samples
-NUM_TEST = 5  # Number of test samples
+NUM_TRAIN = 100  # Number of training samples
+NUM_TEST = 20  # Number of test samples
 NORMALIZED = True  # True: float (normalized), False: uint8 (raw)
 
 # Load MNIST data
