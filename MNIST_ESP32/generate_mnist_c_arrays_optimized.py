@@ -1,47 +1,39 @@
 import numpy as np
-from tensorflow.keras.datasets import mnist
+from keras.datasets import mnist
 
-# Load MNIST dataset
-(x_train, y_train), _ = mnist.load_data()
+# Configurable dataset sizes
+NUM_TRAIN = 10  # Number of training samples
+NUM_TEST = 5  # Number of test samples
 
-# Select first 100 images and labels
-x_train = x_train[:100].astype(np.float32)
-y_train = y_train[:100]
+# Load MNIST data (raw uint8)
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
 
-# Normalize: mean=0.1307, std=0.3081
-x_train = x_train / 255.0  # Scale to [0,1]
-x_train = (x_train - 0.1307) / 0.3081  # Standardize
-x_train = x_train.reshape(100, 1, 28, 28)  # NCHW format: [100,1,28,28]
+# Select specified number of samples
+x_train = x_train[:NUM_TRAIN].astype(np.uint8)
+y_train = y_train[:NUM_TRAIN].astype(np.uint8)
+x_test = x_test[:NUM_TEST].astype(np.uint8)
+y_test = y_test[:NUM_TEST].astype(np.uint8)
 
-# One-hot encode labels
-y_train_one_hot = np.eye(10)[y_train].astype(np.float32)  # [100,10]
+# Generate C header file
+with open("mnist_data.h", "w") as f:
+    f.write("#ifndef MNIST_DATA_H\n#define MNIST_DATA_H\n#include <pgmspace.h>\n\n")
 
-# Function to format array as compact C array
-def array_to_c(array, name, file):
-    file.write(f"const float {name}[{array.shape[0]}][{array.shape[1]}]")
-    file.write(f"[{array.shape[2]}][{array.shape[3]}] PROGMEM={{\n" if len(array.shape) == 4 else f" PROGMEM={{\n")
-    for i in range(array.shape[0]):
-        file.write("{")
-        if len(array.shape) == 4:
-            for c in range(array.shape[1]):
-                file.write("{")
-                for h in range(array.shape[2]):
-                    file.write("{")
-                    for w in range(array.shape[3]):
-                        file.write(f"{array[i,c,h,w]:.4f}" + ("," if w < array.shape[3]-1 else ""))
-                    file.write("}" + ("," if h < array.shape[2]-1 else ""))
-                file.write("}" + ("," if c < array.shape[1]-1 else ""))
-        else:
-            for j in range(array.shape[1]):
-                file.write(f"{array[i,j]:.4f}" + ("," if j < array.shape[1]-1 else ""))
-        file.write("}" + ("," if i < array.shape[0]-1 else "") + "\n")
-    file.write("};\n")
+    # Training input data (uint8)
+    f.write(f"const uint8_t train_input_data[{NUM_TRAIN}][1][28][28] PROGMEM = ")
+    f.write(str(x_train.tolist()).replace("[", "{").replace("]", "}"))
+    f.write(";\n\n")
 
-# Write C arrays to file
-with open("mnist_data.h", "w") as file:
-    file.write("#ifndef MNIST_DATA_H\n#define MNIST_DATA_H\n#include <pgmspace.h>\n")
-    file.write("// MNIST training data (100 images, NCHW, normalized mean=0.1307, std=0.3081)\n")
-    array_to_c(x_train, "train_input_data", file)
-    file.write("\n// MNIST one-hot encoded labels (100 labels, 10 classes)\n")
-    array_to_c(y_train_one_hot, "train_target_data", file)
-    file.write("\n#endif // MNIST_DATA_H\n")
+    # Training target data (uint8, 0-9)
+    f.write(f"const uint8_t train_target_data[{NUM_TRAIN}] PROGMEM = ")
+    f.write(str(y_train.tolist()).replace("[", "{").replace("]", "}"))
+    f.write(";\n\n")
+
+    # Test input data (uint8)
+    f.write(f"const uint8_t test_input_data[{NUM_TEST}][1][28][28] PROGMEM = ")
+    f.write(str(x_test.tolist()).replace("[", "{").replace("]", "}"))
+    f.write(";\n\n")
+
+    # Test target data (uint8, 0-9)
+    f.write(f"const uint8_t test_target_data[{NUM_TEST}] PROGMEM = ")
+    f.write(str(y_test.tolist()).replace("[", "{").replace("]", "}"))
+    f.write(";\n#endif")
