@@ -1,28 +1,31 @@
 #include <aifes.h>
+#include <esp_heap_caps.h>
 
-void setup() {
-  Serial.begin(115200);
-  while (!Serial)
-    ;
+#include "data.h"
 
-  /* ################## Create the neural network in AIfES ################### */
-  // Declaration and configuration of the layers
-  // The main model structure that holds the whole neural network
-  aimodel_t model;
+#define DATASETS 3
+#define INPUT_SIZE 3
+#define HIDDEN_NEURONS 3
+#define OUTPUT_SIZE 2
+#define EPOCHS 100
+#define BATCH_SIZE 3
+#define PRINT_INTERVAL 10
 
-  // The layer structures for F32 data type and their configurations
-  uint16_t input_layer_shape[] = { 1, 3 };
-  ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(2, input_layer_shape);
-  ailayer_dense_f32_t dense_layer_1 = AILAYER_DENSE_F32_A(3);
-  ailayer_leaky_relu_f32_t leaky_relu_layer = AILAYER_LEAKY_RELU_F32_A(0.01f);
-  ailayer_dense_f32_t dense_layer_2 = AILAYER_DENSE_F32_A(2);
-  ailayer_sigmoid_f32_t sigmoid_layer = AILAYER_SIGMOID_F32_A();
+// Model globals
+aimodel_t model;
+uint16_t input_layer_shape[] = { 1, 3 };
+ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(2, input_layer_shape);
+ailayer_dense_f32_t dense_layer_1 = AILAYER_DENSE_F32_A(HIDDEN_NEURONS);
+ailayer_leaky_relu_f32_t leaky_relu_layer = AILAYER_LEAKY_RELU_F32_A(0.01f);
+ailayer_dense_f32_t dense_layer_2 = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
+ailayer_sigmoid_f32_t sigmoid_layer = AILAYER_SIGMOID_F32_A();
 
+// Initialize CNN model
+void init_model()
+{
+  Serial.println(F("Initializing model..."));
 
-  // Connection and initialization of the layers
-  // Layer pointer to perform the connection
   ailayer_t *x;
-
   model.input_layer = ailayer_input_f32_default(&input_layer);
   x = ailayer_dense_f32_default(&dense_layer_1, model.input_layer);
   x = ailayer_leaky_relu_f32_default(&leaky_relu_layer, x);
@@ -33,22 +36,30 @@ void setup() {
   // Finish the model creation by checking the connections and setting some parameters for further processing
   aialgo_compile_model(&model);
 
-
   // Set the memory for the trainable parameters
   uint32_t parameter_memory_size = aialgo_sizeof_parameter_memory(&model);
-  void *parameter_memory = malloc(parameter_memory_size);
+  void *parameter_memory = ps_malloc(parameter_memory_size);
+  if (!parameter_memory) {
+    Serial.println(F("Model memory allocation failed"));
+    while (1);
+  }
 
   // Distribute the memory to the trainable parameters of the model
   aialgo_distribute_parameter_memory(&model, parameter_memory, parameter_memory_size);
+  Serial.printf("Model memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+                parameter_memory, ESP.getFreePsram());
 
   // Print the layer structure to the console
   aiprint("\n-------------- Model structure ---------------\n");
   aialgo_print_model_structure(&model);
   aiprint("----------------------------------------------\n\n");
 
-  /* ############################################################################### */
+  Serial.println(F("Model initialized"));
+}
 
-  /* ################## Train the neural network ###################*/
+void train() {
+  Serial.println(F("Training..."));
+
   // Configure the loss
   ailoss_crossentropy_f32_t crossentropy_loss;
   model.loss = ailoss_crossentropy_f32_default(&crossentropy_loss, model.output_layer);
@@ -95,6 +106,7 @@ void setup() {
                                 0.0f, 0.0f };
   aitensor_t y_train = AITENSOR_2D_F32(y_train_shape, y_train_data);
 
+  // Because in this case we are just interested in the outputs of the FNN on our training dataset, our test data is just the training data.
   aitensor_t *x_test = &x_train;
   aitensor_t *y_test = &y_train;
 
@@ -121,23 +133,92 @@ void setup() {
     }
   }
   aiprint("Finished training\n\n");
-  /* ############################################################################### */
 
-  /* ################## Test the trained model ###################*/
+  test();
+}
+
+// Test model accuracy
+void test()
+{
+  Serial.println(F("Testing..."));
+
+  uint16_t x_test_shape[2] = { 3, 3 };
+  float x_test_data[3 * 3] = { 0.0f, 0.0f, 0.0f,
+                                1.0f, 1.0f, 1.0f,
+                                1.0f, 0.0f, 0.0f };
+  aitensor_t x_test = AITENSOR_2D_F32(x_test_shape, x_test_data);
+
+  // Target data / Labels for training
+  uint16_t y_test_shape[2] = { 3, 2 };
+  float y_test_data[3 * 2] = { 1.0f, 0.0f,
+                                0.0f, 1.0f,
+                                0.0f, 0.0f };
+  aitensor_t y_test = AITENSOR_2D_F32(y_test_shape, y_test_data);
+  
   // Create an empty tensor for the inference results
   uint16_t y_out_shape[2] = { 3, 2 };
   float y_out_data[3 * 2];
   aitensor_t y_out = AITENSOR_2D_F32(y_out_shape, y_out_data);
 
-  aialgo_inference_model(&model, x_test, &y_out);
+  aialgo_inference_model(&model, &x_test, &y_out);
 
   aiprint("x_test:\n");
-  print_aitensor(x_test);
+  print_aitensor(&x_test);
+  aiprint("y_test:\n");
+  print_aitensor(&y_test);
   aiprint("NN output:\n");
   print_aitensor(&y_out);
-  /* ############################################################################### */
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+// Setup with PSRAM check and diagnostics
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+
+  // Print ESP32 diagnostics
+  Serial.println(F("\n##################################"));
+  Serial.println(F("ESP32 Information:"));
+  Serial.printf("Internal Total Heap %d, Internal Used Heap %d, Internal Free Heap %d\n",
+                ESP.getHeapSize(), ESP.getHeapSize() - ESP.getFreeHeap(), ESP.getFreeHeap());
+  Serial.printf("Sketch Size %d, Free Sketch Space %d\n",
+                ESP.getSketchSize(), ESP.getFreeSketchSpace());
+  Serial.printf("SPIRam Total heap %d, SPIRam Free Heap %d\n",
+                ESP.getPsramSize(), ESP.getFreePsram());
+  Serial.printf("Chip Model %s, ChipRevision %d, Cpu Freq %d, SDK Version %s\n",
+                ESP.getChipModel(), ESP.getChipRevision(), ESP.getCpuFreqMHz(), ESP.getSdkVersion());
+  Serial.printf("Flash Size %d, Flash Speed %d\n",
+                ESP.getFlashChipSize(), ESP.getFlashChipSpeed());
+  Serial.println(F("##################################\n\n"));
+
+  // Check PSRAM initialization
+  if (!psramInit())
+  {
+    Serial.println(F("PSRAM initialization failed"));
+    while (1)
+      ;
+  }
+  Serial.println(F("PSRAM initialized"));
+
+  srand(analogRead(A5));
+  init_model();
+  Serial.println(F("Type >train<"));
+}
+
+// Main loop for command input
+void loop()
+{
+  if (Serial.available() > 0)
+  {
+    String str = Serial.readString();
+    if (str.indexOf("train") > -1)
+    {
+      train();
+    }
+    else
+    {
+      Serial.println(F("Unknown command"));
+    }
+  }
 }
