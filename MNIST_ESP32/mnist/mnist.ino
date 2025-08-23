@@ -3,7 +3,7 @@
 #include "mnist_data.h"
 
 // Enable debug logs (set to 0 to disable verbose logs like tensor shapes, per-image copy)
-#define DEBUG 1
+#define DEBUG 0
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(128 * 1024);  // 128KB
@@ -57,38 +57,6 @@ ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_A(DENSE1_SIZE);            
 ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();                                                           // ReLU activation
 ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);                                             // Dense: 32->10
 ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();                                                   // Softmax for probabilities
-
-// Debug utility to verify PROGMEM data (no SRAM copy)
-void copy_data_to_sram(const float *input_data, float *input_buffer,
-                       const float *target_data, float *target_buffer,
-                       uint32_t dataset_size, const char *type) {
-  // Log start of data verification
-  Serial.printf("Verifying PROGMEM %s data, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
-
-  // Verify input and target data directly from PROGMEM
-  for (uint32_t i = 0; i < dataset_size; i++) {
-#if DEBUG
-    Serial.printf("Verifying %s image %u\n", type, i);
-#endif
-    // Check first pixel
-    float first_pixel = pgm_read_float(&input_data[i * 28 * 28]);
-#if DEBUG
-    Serial.printf("%s image %u, first pixel: %.4f\n", type, i, first_pixel);  // ~-0.4242
-#endif
-// Check SRAM stability every 7 rows
-#if DEBUG
-    if (i % 2 == 0) {
-      Serial.printf("%s image %u, SRAM: %u bytes\n", type, i, ESP.getFreeHeap());
-    }
-#endif
-    // Check first target value
-    float first_target = pgm_read_float(&target_data[i * 10]);
-#if DEBUG
-    Serial.printf("%s image %u, first target value: %.1f\n", type, i, first_target);  // ~0.0 or 1.0
-#endif
-  }
-  Serial.printf("%s data verification completed, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
-}
 
 // Initialize CNN layers
 void init_layers() {
@@ -239,35 +207,35 @@ void init_model() {
 void train() {
   // Start training
   Serial.println(F("Training..."));
+  #if DEBUG
   Serial.printf("Free SRAM before: %u bytes\n", ESP.getFreeHeap());
+  #endif
 
   // Configure cross-entropy loss
   ailoss_crossentropy_f32_t crossentropy_loss;
   model.loss = ailoss_crossentropy_f32_default(&crossentropy_loss, model.output_layer);
   if (!model.loss) {
     Serial.println(F("Loss initialization failed"));
-    while (1)
-      ;
+    while (1);
   }
-#if DEBUG
+  #if DEBUG
   aiprint("\nLoss specs:\n");
   aialgo_print_loss_specs(model.loss);
   aiprint("\n");
-#endif
+  #endif
 
   // Configure SGD optimizer
   aiopti_sgd_f32_t sgd_opti = { .learning_rate = LEARNING_RATE };
   aiopti_t *optimizer = aiopti_sgd_f32_default(&sgd_opti);
   if (!optimizer) {
     Serial.println(F("Optimizer initialization failed"));
-    while (1)
-      ;
+    while (1);
   }
-#if DEBUG
+  #if DEBUG
   aiprint("Optimizer specs:\n");
   aialgo_print_optimizer_specs(optimizer);
   aiprint("\n");
-#endif
+  #endif
 
   // Initialize model parameters
   aialgo_initialize_parameters_model(&model);
@@ -278,56 +246,54 @@ void train() {
   void *training_memory = ps_malloc(training_memory_size);
   if (!training_memory) {
     Serial.println(F("Training memory allocation failed"));
-    while (1)
-      ;
+    while (1);
   }
   aialgo_schedule_training_memory(&model, optimizer, training_memory, training_memory_size);
   aialgo_init_model_for_training(&model, optimizer);
   Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 training_memory_size, ESP.getFreePsram());
 
-  // Verify PROGMEM training data
-  float dummy_buffer[1];  // Minimal buffer for compatibility
-  copy_data_to_sram((float *)train_input_data, dummy_buffer,
-                    (float *)train_target_data, dummy_buffer,
-                    TRAIN_DATASET, "train");
-
+  #if DEBUG
   // Verify first pixel directly from PROGMEM
-  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0]));  // ~-0.4242
+  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0])); // ~-0.4242
+  #endif
 
   // Create tensors directly from PROGMEM
-  const uint16_t input_shape[] = { TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-  const uint16_t target_shape[] = { TRAIN_DATASET, OUTPUT_SIZE };
+  const uint16_t input_shape[] = {TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+  const uint16_t target_shape[] = {TRAIN_DATASET, OUTPUT_SIZE};
   aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)train_input_data);
   aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)train_target_data);
 
-// Log tensor shapes if DEBUG enabled
-#if DEBUG
+  // Log tensor shapes if DEBUG enabled
+  #if DEBUG
   Serial.printf("Input tensor shape: [%u,%u,%u,%u]\n",
                 input_tensor.shape[0], input_tensor.shape[1],
                 input_tensor.shape[2], input_tensor.shape[3]);
   Serial.printf("Target tensor shape: [%u,%u]\n",
                 target_tensor.shape[0], target_tensor.shape[1]);
   Serial.printf("Free SRAM after tensors: %u bytes\n", ESP.getFreeHeap());
-#endif
+  #endif
 
   // Test forward pass
   Serial.println(F("Testing forward pass"));
   aitensor_t *output_tensor = aialgo_forward_model(&model, &input_tensor);
   if (!output_tensor) {
     Serial.println(F("Forward pass failed"));
-    while (1)
-      ;
+    while (1);
   }
   Serial.println(F("Forward pass completed"));
 
   // Training loop
   float loss;
-  aiprint("\nStart training\n");
+  aiprint("Start training\n");
   for (int i = 0; i < EPOCHS; i++) {
+    #if DEBUG
     Serial.println(F("Before train_model"));
+    #endif
     aialgo_train_model(&model, &input_tensor, &target_tensor, optimizer, BATCH_SIZE);
+    #if DEBUG
     Serial.println(F("After train_model"));
+    #endif
     if (i % PRINT_INTERVAL == 0) {
       aialgo_calc_loss_model_f32(&model, &input_tensor, &target_tensor, &loss);
       aiprint("Epoch ");
@@ -337,7 +303,7 @@ void train() {
       aiprint("\n");
     }
   }
-  aiprint("Finished training\n\n");
+  aiprint("Finished training\n");
 
   // Free training memory
   free(training_memory);
@@ -348,40 +314,37 @@ void train() {
 void test() {
   // Start testing
   Serial.println(F("Testing..."));
+  #if DEBUG
   Serial.printf("Free SRAM before: %u bytes\n", ESP.getFreeHeap());
+  #endif
 
-  // Verify PROGMEM test data
-  float dummy_buffer[1];  // Minimal buffer for compatibility
-  copy_data_to_sram((float *)test_input_data, dummy_buffer,
-                    (float *)test_target_data, dummy_buffer,
-                    TEST_DATASET, "test");
-
+  #if DEBUG
   // Verify first pixel directly from PROGMEM
-  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0]));  // ~-0.4242
+  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0])); // ~-0.4242
+  #endif
 
   // Create tensors directly from PROGMEM
-  const uint16_t input_shape[] = { TEST_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-  const uint16_t target_shape[] = { TEST_DATASET, OUTPUT_SIZE };
+  const uint16_t input_shape[] = {TEST_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+  const uint16_t target_shape[] = {TEST_DATASET, OUTPUT_SIZE};
   aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)test_input_data);
   aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)test_target_data);
 
-// Log tensor shapes if DEBUG enabled
-#if DEBUG
+  // Log tensor shapes if DEBUG enabled
+  #if DEBUG
   Serial.printf("Input tensor shape: [%u,%u,%u,%u]\n",
                 input_tensor.shape[0], input_tensor.shape[1],
                 input_tensor.shape[2], input_tensor.shape[3]);
   Serial.printf("Target tensor shape: [%u,%u]\n",
                 target_tensor.shape[0], target_tensor.shape[1]);
   Serial.printf("Free SRAM after tensors: %u bytes\n", ESP.getFreeHeap());
-#endif
+  #endif
 
   // Test inference
   Serial.println(F("Testing forward pass"));
   aitensor_t *output_tensor = aialgo_forward_model(&model, &input_tensor);
   if (!output_tensor) {
     Serial.println(F("Forward pass failed"));
-    while (1)
-      ;
+    while (1);
   }
   Serial.println(F("Forward pass completed"));
 
@@ -411,7 +374,9 @@ void test() {
   float accuracy = (float)correct / TEST_DATASET * 100.0f;
   Serial.printf("Testing completed, Accuracy: %.2f%% (%u/%u)\n",
                 accuracy, correct, TEST_DATASET);
+  #if DEBUG
   Serial.printf("Free SRAM after: %u bytes\n", ESP.getFreeHeap());
+  #endif
 }
 
 // Infer function (stub)
