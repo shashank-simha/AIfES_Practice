@@ -2,18 +2,42 @@ import numpy as np
 from keras.datasets import mnist
 
 # Configuration
-NUM_TRAIN = 100  # Number of training samples
+NUM_TRAIN = 200  # Number of training samples
 NUM_TEST = 20  # Number of test samples
+NUM_CLASSES = 10  # Number of classes
 NORMALIZED = True  # True: float (normalized), False: uint8 (raw)
 
 # Load MNIST data
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
-# Select specified number of samples
-x_train = x_train[:NUM_TRAIN]
-y_train = y_train[:NUM_TRAIN].astype(np.uint8)
-x_test = x_test[:NUM_TEST]
-y_test = y_test[:NUM_TEST].astype(np.uint8)
+# Select balanced training samples: 20 per class (0-9)
+np.random.seed(42)  # For reproducibility
+train_idx = []
+for i in range(10):  # Classes 0-9
+    class_indices = np.where(y_train == i)[0]
+    train_idx.extend(
+        np.random.choice(
+            class_indices, size=int(NUM_TRAIN / NUM_CLASSES), replace=False
+        )
+    )
+train_idx = np.array(train_idx)
+x_train = x_train[train_idx]
+y_train = y_train[train_idx].astype(np.uint8)
+
+# Select balanced test samples: 2 per class (0-9)
+test_idx = []
+for i in range(10):  # Classes 0-9
+    class_indices = np.where(y_test == i)[0]
+    test_idx.extend(
+        np.random.choice(class_indices, size=int(NUM_TEST / NUM_CLASSES), replace=False)
+    )
+test_idx = np.array(test_idx)
+x_test = x_test[test_idx]
+y_test = y_test[test_idx].astype(np.uint8)
+
+# Print class counts
+print("Training class counts (0-9):", np.bincount(y_train, minlength=10))
+print("Test class counts (0-9):", np.bincount(y_test, minlength=10))
 
 # Normalize data if NORMALIZED=True
 if NORMALIZED:
@@ -82,13 +106,11 @@ def format_array(data, is_float, is_2d=False):
 # Generate C header file
 with open("mnist_data.h", "w") as f:
     f.write("#ifndef MNIST_DATA_H\n#define MNIST_DATA_H\n#include <pgmspace.h>\n\n")
-
     # Training input data
     data_type = "float" if NORMALIZED else "uint8_t"
     f.write(f"const {data_type} train_input_data[{NUM_TRAIN}][1][28][28] PROGMEM = ")
     f.write(format_4d_array(x_train, NUM_TRAIN, NORMALIZED))
     f.write(";\n\n")
-
     # Training target data
     if NORMALIZED:
         f.write(f"const float train_target_data[{NUM_TRAIN}][10] PROGMEM = ")
@@ -97,12 +119,10 @@ with open("mnist_data.h", "w") as f:
         f.write(f"const uint8_t train_target_data[{NUM_TRAIN}] PROGMEM = ")
         f.write(format_array(y_train_onehot, NORMALIZED))
     f.write(";\n\n")
-
     # Test input data
     f.write(f"const {data_type} test_input_data[{NUM_TEST}][1][28][28] PROGMEM = ")
     f.write(format_4d_array(x_test, NUM_TEST, NORMALIZED))
     f.write(";\n\n")
-
     # Test target data
     if NORMALIZED:
         f.write(f"const float test_target_data[{NUM_TEST}][10] PROGMEM = ")
