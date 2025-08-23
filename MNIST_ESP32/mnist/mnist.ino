@@ -5,8 +5,8 @@
 // Enable debug logs (set to 0 to disable verbose logs like tensor shapes, per-image copy)
 #define DEBUG 1
 
-  // Set stack size for loopTask to handle large buffers and AIfES internals
-  SET_LOOP_TASK_STACK_SIZE(128 * 1024);  // 128KB
+// Set stack size for loopTask to handle large buffers and AIfES internals
+SET_LOOP_TASK_STACK_SIZE(128 * 1024);  // 128KB
 
 // Model and training constants
 #define INPUT_CHANNELS 1  // Grayscale images
@@ -58,46 +58,36 @@ ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();                          
 ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);                                             // Dense: 32->10
 ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();                                                   // Softmax for probabilities
 
-// Copy PROGMEM data to SRAM buffers
+// Debug utility to verify PROGMEM data (no SRAM copy)
 void copy_data_to_sram(const float *input_data, float *input_buffer,
                        const float *target_data, float *target_buffer,
                        uint32_t dataset_size, const char *type) {
-  // Log start of data copy
-  Serial.printf("Copying PROGMEM %s data to SRAM, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
+  // Log start of data verification
+  Serial.printf("Verifying PROGMEM %s data, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
 
-  // Copy input and target data for each sample
+  // Verify input and target data directly from PROGMEM
   for (uint32_t i = 0; i < dataset_size; i++) {
 #if DEBUG
-    Serial.printf("Copying %s image %u\n", type, i);
+    Serial.printf("Verifying %s image %u\n", type, i);
 #endif
-    // Copy input image (28x28)
-    for (uint32_t h = 0; h < 28; h++) {
-      for (uint32_t w = 0; w < 28; w++) {
-        input_buffer[i * 28 * 28 + h * 28 + w] = pgm_read_float(&input_data[i * 28 * 28 + h * 28 + w]);
+    // Check first pixel
+    float first_pixel = pgm_read_float(&input_data[i * 28 * 28]);
 #if DEBUG
-        if (h == 0 && w == 0) {
-          Serial.printf("%s image %u, first pixel: %.4f\n", type, i, input_buffer[i * 28 * 28]);
-        }
+    Serial.printf("%s image %u, first pixel: %.4f\n", type, i, first_pixel);  // ~-0.4242
 #endif
-      }
+// Check SRAM stability every 7 rows
 #if DEBUG
-      if (h % 7 == 0) {
-        Serial.printf("%s image %u, row %u, SRAM: %u bytes\n", type, i, h, ESP.getFreeHeap());
-      }
-#endif
+    if (i % 2 == 0) {
+      Serial.printf("%s image %u, SRAM: %u bytes\n", type, i, ESP.getFreeHeap());
     }
-    // Copy target one-hot labels (10 classes)
-    for (uint32_t j = 0; j < 10; j++) {
-      target_buffer[i * 10 + j] = pgm_read_float(&target_data[i * 10 + j]);
-#if DEBUG
-      if (j == 0) {
-        Serial.printf("%s image %u, first target value: %.1f\n", type, i, target_buffer[i * 10]);
-      }
 #endif
-    }
+    // Check first target value
+    float first_target = pgm_read_float(&target_data[i * 10]);
+#if DEBUG
+    Serial.printf("%s image %u, first target value: %.1f\n", type, i, first_target);  // ~0.0 or 1.0
+#endif
   }
-  // Log completion of data copy
-  Serial.printf("%s data copy completed, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
+  Serial.printf("%s data verification completed, Free SRAM: %u bytes\n", type, ESP.getFreeHeap());
 }
 
 // Initialize CNN layers
@@ -296,23 +286,20 @@ void train() {
   Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 training_memory_size, ESP.getFreePsram());
 
-  // Allocate SRAM buffers for training data
-  float input_buffer[TRAIN_DATASET][1][28][28];  // ~31,360 bytes
-  float target_buffer[TRAIN_DATASET][10];        // ~400 bytes
-
-  // Copy training data from PROGMEM to SRAM
-  copy_data_to_sram((float *)train_input_data, (float *)input_buffer,
-                    (float *)train_target_data, (float *)target_buffer,
+  // Verify PROGMEM training data
+  float dummy_buffer[1];  // Minimal buffer for compatibility
+  copy_data_to_sram((float *)train_input_data, dummy_buffer,
+                    (float *)train_target_data, dummy_buffer,
                     TRAIN_DATASET, "train");
 
-  // Verify first pixel
-  Serial.printf("First train pixel: %.4f\n", input_buffer[0][0][0][0]);  // ~-0.4242
+  // Verify first pixel directly from PROGMEM
+  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0]));  // ~-0.4242
 
-  // Create input and target tensors
+  // Create tensors directly from PROGMEM
   const uint16_t input_shape[] = { TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
   const uint16_t target_shape[] = { TRAIN_DATASET, OUTPUT_SIZE };
-  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)input_buffer);
-  aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)target_buffer);
+  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)train_input_data);
+  aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)train_target_data);
 
 // Log tensor shapes if DEBUG enabled
 #if DEBUG
@@ -363,23 +350,20 @@ void test() {
   Serial.println(F("Testing..."));
   Serial.printf("Free SRAM before: %u bytes\n", ESP.getFreeHeap());
 
-  // Allocate SRAM buffers for test data
-  float input_buffer[TEST_DATASET][1][28][28];  // ~15,680 bytes
-  float target_buffer[TEST_DATASET][10];        // ~200 bytes
-
-  // Copy test data from PROGMEM to SRAM
-  copy_data_to_sram((float *)test_input_data, (float *)input_buffer,
-                    (float *)test_target_data, (float *)target_buffer,
+  // Verify PROGMEM test data
+  float dummy_buffer[1];  // Minimal buffer for compatibility
+  copy_data_to_sram((float *)test_input_data, dummy_buffer,
+                    (float *)test_target_data, dummy_buffer,
                     TEST_DATASET, "test");
 
-  // Verify first pixel
-  Serial.printf("First test pixel: %.4f\n", input_buffer[0][0][0][0]);  // ~-0.4242
+  // Verify first pixel directly from PROGMEM
+  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0]));  // ~-0.4242
 
-  // Create input and target tensors
+  // Create tensors directly from PROGMEM
   const uint16_t input_shape[] = { TEST_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
   const uint16_t target_shape[] = { TEST_DATASET, OUTPUT_SIZE };
-  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)input_buffer);
-  aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)target_buffer);
+  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)test_input_data);
+  aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)test_target_data);
 
 // Log tensor shapes if DEBUG enabled
 #if DEBUG
@@ -412,7 +396,7 @@ void test() {
         max_prob = prob;
         predicted = j;
       }
-      if (target_buffer[i][j] == 1.0f) {
+      if (pgm_read_float(&test_target_data[i * 10 + j]) == 1.0f) {
         true_label = j;
       }
     }
