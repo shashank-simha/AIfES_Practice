@@ -402,9 +402,10 @@ void test() {
   float accuracy = (float)correct / TEST_DATASET * 100.0f;
   Serial.printf("Testing completed, Accuracy: %.2f%% (%u/%u)\n",
                 accuracy, correct, TEST_DATASET);
-#if DEBUG
-  Serial.printf("Free SRAM after: %u bytes\n", ESP.getFreeHeap());
-#endif
+
+  // Free training memory
+  free(inference_memory);
+  Serial.printf("Inference memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
 }
 
 // Infer function (stub)
