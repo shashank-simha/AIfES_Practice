@@ -6,6 +6,9 @@
 // Enable debug logs (set to 0 to disable verbose logs like tensor shapes, per-image copy)
 #define DEBUG 1
 
+// Define input normalization (0: uint8_t [0, 255], 1: float normalized)
+#define NORMALIZED 0
+
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(270 * 1024);  // 256KB
 
@@ -33,7 +36,7 @@ SET_LOOP_TASK_STACK_SIZE(270 * 1024);  // 256KB
 #define DENSE1_SIZE 64        // Dense layer neurons
 #define LAYER_COUNT 12        // Layers: input, conv1, relu1, pool1, conv2, relu2, pool2, flatten, dense1, relu3, dense2, softmax
 #define TRAIN_DATASET 200     // Number of training samples
-#define TEST_DATASET 200       // Number of test samples
+#define TEST_DATASET 20       // Number of test samples
 #define BATCH_SIZE 4          // Batch size for training
 #define EPOCHS 1              // Number of training epochs
 #define PRINT_INTERVAL 1      // Print loss every epoch
@@ -47,16 +50,16 @@ void *parameter_memory;          // PSRAM for weights/biases
 // Layer structures
 uint16_t input_shape[] = { 1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };                                                                  // Input: [1,1,28,28]
 ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);                                                                      // 4D input tensor
-ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weights, conv1_bias);  // Conv1: 1->4, 3x3
+ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weights, conv1_bias);  // Conv1: 1->8, 3x3
 ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_M();                                                                                      // ReLU activation
 ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);                                        // MaxPool: 2x2
-ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_M(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv2_weights, conv2_bias);  // Conv2: 4->8, 3x3
+ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_M(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv2_weights, conv2_bias);  // Conv2: 8->16, 3x3
 ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_M();                                                                                      // ReLU activation
 ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);                                        // MaxPool: 2x2
 ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_M();                                                                              // Flatten to vector
-ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, fc1_weights, fc1_bias);                                                 // Dense: 392->32
+ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, fc1_weights, fc1_bias);                                                 // Dense: 784->64
 ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_M();                                                                                      // ReLU activation
-ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, fc2_weights, fc2_bias);                                                 // Dense: 32->10
+ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, fc2_weights, fc2_bias);                                                 // Dense: 64->10
 ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_M();                                                                              // Softmax for probabilities
 
 // Initialize CNN layers
@@ -73,7 +76,7 @@ void init_layers() {
       ;
   }
 
-  // Conv1: 1->4 channels, 3x3 kernel, output [1,4,28,28]
+  // Conv1: 1->8 channels, 3x3 kernel, output [1,8,28,28]
   conv1_layer.channel_axis = 1;  // NCHW format
   layers[1] = x = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
   if (!x) {
@@ -90,7 +93,7 @@ void init_layers() {
       ;
   }
 
-  // MaxPool: 2x2, output [1,4,14,14]
+  // MaxPool: 2x2, output [1,8,14,14]
   pool1_layer.channel_axis = 1;
   layers[3] = x = ailayer_maxpool2d_f32_default(&pool1_layer, x);
   if (!x) {
@@ -99,7 +102,7 @@ void init_layers() {
       ;
   }
 
-  // Conv2: 4->8 channels, 3x3 kernel, output [1,8,14,14]
+  // Conv2: 8->16 channels, 3x3 kernel, output [1,16,14,14]
   conv2_layer.channel_axis = 1;
   layers[4] = x = ailayer_conv2d_f32_default(&conv2_layer, x);
   if (!x) {
@@ -116,7 +119,7 @@ void init_layers() {
       ;
   }
 
-  // MaxPool: 2x2, output [1,8,7,7]
+  // MaxPool: 2x2, output [1,16,7,7]
   pool2_layer.channel_axis = 1;
   layers[6] = x = ailayer_maxpool2d_f32_default(&pool2_layer, x);
   if (!x) {
@@ -125,7 +128,7 @@ void init_layers() {
       ;
   }
 
-  // Flatten to [1,392]
+  // Flatten to [1,784]
   layers[7] = x = ailayer_flatten_f32_default(&flatten_layer, x);
   if (!x) {
     Serial.println(F("Flatten layer initialization failed"));
@@ -133,7 +136,7 @@ void init_layers() {
       ;
   }
 
-  // Dense: 392->32
+  // Dense: 784->64
   layers[8] = x = ailayer_dense_f32_default(&dense1_layer, x);
   if (!x) {
     Serial.println(F("Dense1 layer initialization failed"));
@@ -149,7 +152,7 @@ void init_layers() {
       ;
   }
 
-  // Dense: 32->10
+  // Dense: 64->10
   layers[10] = x = ailayer_dense_f32_default(&dense2_layer, x);
   if (!x) {
     Serial.println(F("Dense2 layer initialization failed"));
@@ -269,14 +272,36 @@ void train() {
                 training_memory_size, ESP.getFreePsram());
 
 #if DEBUG
-  // Verify first pixel directly from PROGMEM
-  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0]));  // ~-0.4242
+// Verify first pixel directly from PROGMEM
+#if NORMALIZED
+  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0]));  // Normalized (~-0.4242)
+#else
+  Serial.printf("First train pixel: %u\n", pgm_read_byte(&train_input_data[0]));  // 0-255
+#endif
 #endif
 
-  // Create tensors directly from PROGMEM
+  // Convert input data to float [0, 1] if uint8_t
+  float input_data[TRAIN_DATASET * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
+  for (uint32_t i = 0; i < TRAIN_DATASET; i++) {
+    for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+      for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+        for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+#if NORMALIZED
+          input_data[i * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            pgm_read_float(&train_input_data[i][c][h][w]);
+#else
+          input_data[i * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            pgm_read_byte(&train_input_data[i][c][h][w]) / 255.0f;
+#endif
+        }
+      }
+    }
+  }
+
+  // Create tensors
   const uint16_t input_shape[] = { TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
   const uint16_t target_shape[] = { TRAIN_DATASET, OUTPUT_SIZE };
-  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)train_input_data);
+  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, input_data);
   aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)train_target_data);
 
 // Log tensor shapes if DEBUG enabled
@@ -342,53 +367,72 @@ void test() {
   aialgo_schedule_inference_memory(&model, inference_memory, inference_memory_size);
   Serial.printf("Inference memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 inference_memory_size, ESP.getFreePsram());
+
 #if DEBUG
-  // Verify first pixel directly from PROGMEM
-  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0]));  // ~-0.4242
+// Verify first pixel directly from PROGMEM
+#if NORMALIZED
+  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0]));  // Normalized (~-0.4242)
+#else
+  Serial.printf("First test pixel: %u\n", pgm_read_byte(&test_input_data[0]));    // 0-255
+#endif
 #endif
 
-  // Create tensors directly from PROGMEM
-  const uint16_t input_shape[] = { TEST_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-  const uint16_t target_shape[] = { TEST_DATASET, OUTPUT_SIZE };
-  aitensor_t input_tensor = AITENSOR_4D_F32(input_shape, (float *)test_input_data);
-  aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, (float *)test_target_data);
+  // Per-sample inference
+  const uint16_t single_input_shape[] = { 1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
+  const uint16_t output_shape[] = { 1, OUTPUT_SIZE };
+  float input_data[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
+  float output_data[OUTPUT_SIZE];
+  aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_data);
+  aitensor_t output_tensor = AITENSOR_2D_F32(output_shape, output_data);
 
-// Log tensor shapes if DEBUG enabled
-#if DEBUG
-  Serial.printf("Input tensor shape: [%u,%u,%u,%u]\n",
-                input_tensor.shape[0], input_tensor.shape[1],
-                input_tensor.shape[2], input_tensor.shape[3]);
-  Serial.printf("Target tensor shape: [%u,%u]\n",
-                target_tensor.shape[0], target_tensor.shape[1]);
-  Serial.printf("Free SRAM after tensors: %u bytes\n", ESP.getFreeHeap());
-#endif
-
-  // Test inference
-  Serial.println(F("Testing forward pass"));
-  aitensor_t *output_tensor = aialgo_forward_model(&model, &input_tensor);
-  if (!output_tensor) {
-    Serial.println(F("Forward pass failed"));
-    while (1)
-      ;
-  }
-  Serial.println(F("Forward pass completed"));
-
-  // Calculate accuracy
   uint32_t correct = 0;
   for (uint32_t i = 0; i < TEST_DATASET; i++) {
+    // Convert input to float
+    for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+      for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+        for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+#if NORMALIZED
+          input_data[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            pgm_read_float(&test_input_data[i][c][h][w]);
+#else
+          input_data[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            pgm_read_byte(&test_input_data[i][c][h][w]) / 255.0f;
+#endif
+        }
+      }
+    }
+
+    // Forward pass
+    aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
+    if (!output_tensor_ptr) {
+      Serial.printf("Forward pass failed for image %u\n", i);
+      continue;
+    }
+
+    // Find predicted and true labels
     uint32_t predicted = 0, true_label = 0;
-    float max_prob = ((float *)output_tensor->data)[i * 10];
-    for (uint32_t j = 1; j < 10; j++) {
-      float prob = ((float *)output_tensor->data)[i * 10 + j];
+    float *output_data = (float *)output_tensor_ptr->data;
+    float max_prob = output_data[0];
+#if DEBUG
+    Serial.printf("Image %u probabilities: [", i);
+    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+      Serial.printf("%.3f", output_data[j]);
+      if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+    }
+    Serial.println("]");
+#endif
+
+    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+      float prob = output_data[j];
       if (prob > max_prob) {
         max_prob = prob;
         predicted = j;
       }
-      for (uint32_t j = 0; j < 10; j++) {  // Changed from j=1 to j=0
-        if (pgm_read_float(&test_target_data[i][j]) == 1.0f) {
-          true_label = j;
-          break;  // Exit loop once true label is found
-        }
+    }
+    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+      if (pgm_read_float(&test_target_data[i][j]) == 1.0f) {
+        true_label = j;
+        break;  // Exit loop once true label is found
       }
     }
     if (predicted == true_label) {
@@ -403,7 +447,7 @@ void test() {
   Serial.printf("Testing completed, Accuracy: %.2f%% (%u/%u)\n",
                 accuracy, correct, TEST_DATASET);
 
-  // Free training memory
+  // Free inference memory
   free(inference_memory);
   Serial.printf("Inference memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
 }
