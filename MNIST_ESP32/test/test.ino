@@ -186,31 +186,17 @@ void init_model() {
   }
 
   // Allocate parameter memory in PSRAM (~100 KB)
-  uint32_t parameter_memory_size = aialgo_sizeof_parameter_memory(&model);
-  parameter_memory = ps_malloc(parameter_memory_size);
-  if (!parameter_memory) {
-    Serial.println(F("Model memory allocation failed"));
-    while (1)
-      ;
-  }
-  aialgo_distribute_parameter_memory(&model, parameter_memory, parameter_memory_size);
-  Serial.printf("Model memory allocated: %u bytes, Free PSRAM: %u bytes\n",
-                parameter_memory_size, ESP.getFreePsram());
+  // uint32_t parameter_memory_size = aialgo_sizeof_parameter_memory(&model);
+  // parameter_memory = ps_malloc(parameter_memory_size);
+  // if (!parameter_memory) {
+  //   Serial.println(F("Model memory allocation failed"));
+  //   while (1)
+  //     ;
+  // }
+  // aialgo_distribute_parameter_memory(&model, parameter_memory, parameter_memory_size);
+  // Serial.printf("Model memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+  //               parameter_memory_size, ESP.getFreePsram());
 
-#if DEBUG
-  Serial.printf("First 10 conv1 weights: ");
-  for (int i = 0; i < 10; i++) {
-    float w = pgm_read_float(&conv1_weights[i]);
-    Serial.printf("%.6f ", w);
-  }
-  Serial.println();
-  Serial.printf("First 5 dense2 weights: ");
-  for (int i = 0; i < 5; i++) {
-    float w = pgm_read_float(&fc2_weights[i]);
-    Serial.printf("%.6f ", w);
-  }
-  Serial.println();
-#endif
 // Print model structure if DEBUG enabled
 #if DEBUG
   aiprint("\n-------------- Model structure ---------------\n");
@@ -229,55 +215,6 @@ void init_model() {
   Serial.printf("dense1 bias shape: %u\n", *(dense1_layer.bias_shape));
   Serial.printf("dense2 weights shape: [%u, %u]\n", dense2_layer.weights_shape[0], dense2_layer.weights_shape[1]);
   Serial.printf("dense2 bias shape: %u\n", *(dense2_layer.bias_shape));
-#endif
-
-  // Manually copy weights from mnist_weights.h
-  float *conv1_weights_ptr = (float *)conv1_layer.weights.data;
-  for (uint32_t i = 0; i < conv1_layer.weights_shape[0] * conv1_layer.weights_shape[1] * conv1_layer.weights_shape[2] * conv1_layer.weights_shape[3]; i++) {
-    conv1_weights_ptr[i] = pgm_read_float(&conv1_weights[i]);
-  }
-  float *conv1_bias_ptr = (float *)conv1_layer.bias.data;
-  for (uint32_t i = 0; i < conv1_layer.bias_shape[0]; i++) {
-    conv1_bias_ptr[i] = pgm_read_float(&conv1_bias[i]);
-  }
-  float *conv2_weights_ptr = (float *)conv2_layer.weights.data;
-  for (uint32_t i = 0; i < conv2_layer.weights_shape[0] * conv2_layer.weights_shape[1] * conv2_layer.weights_shape[2] * conv2_layer.weights_shape[3]; i++) {
-    conv2_weights_ptr[i] = pgm_read_float(&conv2_weights[i]);
-  }
-  float *conv2_bias_ptr = (float *)conv2_layer.bias.data;
-  for (uint32_t i = 0; i < conv2_layer.bias_shape[0]; i++) {
-    conv2_bias_ptr[i] = pgm_read_float(&conv2_bias[i]);
-  }
-  float *dense1_weights_ptr = (float *)dense1_layer.weights.data;
-  for (uint32_t i = 0; i < dense1_layer.weights_shape[0] * dense1_layer.weights_shape[1]; i++) {
-    dense1_weights_ptr[i] = pgm_read_float(&fc1_weights[i]);
-  }
-  float *dense1_bias_ptr = (float *)dense1_layer.bias.data;
-  for (uint32_t i = 0; i < dense1_layer.bias_shape[0]; i++) {
-    dense1_bias_ptr[i] = pgm_read_float(&fc1_bias[i]);
-  }
-  float *dense2_weights_ptr = (float *)dense2_layer.weights.data;
-  for (uint32_t i = 0; i < dense2_layer.weights_shape[0] * dense2_layer.weights_shape[1]; i++) {
-    dense2_weights_ptr[i] = pgm_read_float(&fc2_weights[i]);
-  }
-  float *dense2_bias_ptr = (float *)dense2_layer.bias.data;
-  for (uint32_t i = 0; i < dense2_layer.bias_shape[0]; i++) {
-    dense2_bias_ptr[i] = pgm_read_float(&fc2_bias[i]);
-  }
-
-#if DEBUG
-  Serial.printf("First 10 conv1_layer weights after loading: ");
-  float *conv1_weights_loaded = (float *)conv1_layer.weights.data;
-  for (int i = 0; i < 10; i++) {
-    Serial.printf("%.6f ", conv1_weights_loaded[i]);
-  }
-  Serial.println();
-  Serial.printf("First 5 dense2_layer weights after loading: ");
-  float *dense2_weights_loaded = (float *)dense2_layer.weights.data;
-  for (int i = 0; i < 5; i++) {
-    Serial.printf("%.6f ", dense2_weights_loaded[i]);
-  }
-  Serial.println();
 #endif
 }
 
@@ -476,7 +413,7 @@ void test() {
             pgm_read_float(&test_input_data[i][c][h][w]);
 #else
           input_data[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_byte(&test_input_data[i][c][h][w]) / 255.0f;
+            pgm_read_byte(&test_input_data[i][c][h][w]) / 1.0f;
 #endif
         }
       }
@@ -484,7 +421,7 @@ void test() {
 
 #if DEBUG
     if (i < 3) {  // Print middle row pixels for first 3 images
-      Serial.printf("Image %u first 5 pixels: ", i);
+      Serial.printf("Image %u middle row pixels: ", i);
       for (int p = 28 * 14; p < 28 * 15; p++) {
         Serial.printf("%.4f ", input_data[p]);
       }
