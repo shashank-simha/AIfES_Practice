@@ -197,6 +197,20 @@ void init_model() {
   Serial.printf("Model memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 parameter_memory_size, ESP.getFreePsram());
 
+#if DEBUG
+  Serial.printf("First 10 conv1 weights: ");
+  for (int i = 0; i < 10; i++) {
+    float w = pgm_read_float(&conv1_weights[i]);
+    Serial.printf("%.6f ", w);
+  }
+  Serial.println();
+  Serial.printf("First 5 dense2 weights: ");
+  for (int i = 0; i < 5; i++) {
+    float w = pgm_read_float(&fc2_weights[i]);
+    Serial.printf("%.6f ", w);
+  }
+  Serial.println();
+#endif
 // Print model structure if DEBUG enabled
 #if DEBUG
   aiprint("\n-------------- Model structure ---------------\n");
@@ -215,6 +229,55 @@ void init_model() {
   Serial.printf("dense1 bias shape: %u\n", *(dense1_layer.bias_shape));
   Serial.printf("dense2 weights shape: [%u, %u]\n", dense2_layer.weights_shape[0], dense2_layer.weights_shape[1]);
   Serial.printf("dense2 bias shape: %u\n", *(dense2_layer.bias_shape));
+#endif
+
+  // Manually copy weights from mnist_weights.h
+  float *conv1_weights_ptr = (float *)conv1_layer.weights.data;
+  for (uint32_t i = 0; i < conv1_layer.weights_shape[0] * conv1_layer.weights_shape[1] * conv1_layer.weights_shape[2] * conv1_layer.weights_shape[3]; i++) {
+    conv1_weights_ptr[i] = pgm_read_float(&conv1_weights[i]);
+  }
+  float *conv1_bias_ptr = (float *)conv1_layer.bias.data;
+  for (uint32_t i = 0; i < conv1_layer.bias_shape[0]; i++) {
+    conv1_bias_ptr[i] = pgm_read_float(&conv1_bias[i]);
+  }
+  float *conv2_weights_ptr = (float *)conv2_layer.weights.data;
+  for (uint32_t i = 0; i < conv2_layer.weights_shape[0] * conv2_layer.weights_shape[1] * conv2_layer.weights_shape[2] * conv2_layer.weights_shape[3]; i++) {
+    conv2_weights_ptr[i] = pgm_read_float(&conv2_weights[i]);
+  }
+  float *conv2_bias_ptr = (float *)conv2_layer.bias.data;
+  for (uint32_t i = 0; i < conv2_layer.bias_shape[0]; i++) {
+    conv2_bias_ptr[i] = pgm_read_float(&conv2_bias[i]);
+  }
+  float *dense1_weights_ptr = (float *)dense1_layer.weights.data;
+  for (uint32_t i = 0; i < dense1_layer.weights_shape[0] * dense1_layer.weights_shape[1]; i++) {
+    dense1_weights_ptr[i] = pgm_read_float(&fc1_weights[i]);
+  }
+  float *dense1_bias_ptr = (float *)dense1_layer.bias.data;
+  for (uint32_t i = 0; i < dense1_layer.bias_shape[0]; i++) {
+    dense1_bias_ptr[i] = pgm_read_float(&fc1_bias[i]);
+  }
+  float *dense2_weights_ptr = (float *)dense2_layer.weights.data;
+  for (uint32_t i = 0; i < dense2_layer.weights_shape[0] * dense2_layer.weights_shape[1]; i++) {
+    dense2_weights_ptr[i] = pgm_read_float(&fc2_weights[i]);
+  }
+  float *dense2_bias_ptr = (float *)dense2_layer.bias.data;
+  for (uint32_t i = 0; i < dense2_layer.bias_shape[0]; i++) {
+    dense2_bias_ptr[i] = pgm_read_float(&fc2_bias[i]);
+  }
+
+#if DEBUG
+  Serial.printf("First 10 conv1_layer weights after loading: ");
+  float *conv1_weights_loaded = (float *)conv1_layer.weights.data;
+  for (int i = 0; i < 10; i++) {
+    Serial.printf("%.6f ", conv1_weights_loaded[i]);
+  }
+  Serial.println();
+  Serial.printf("First 5 dense2_layer weights after loading: ");
+  float *dense2_weights_loaded = (float *)dense2_layer.weights.data;
+  for (int i = 0; i < 5; i++) {
+    Serial.printf("%.6f ", dense2_weights_loaded[i]);
+  }
+  Serial.println();
 #endif
 }
 
@@ -385,6 +448,23 @@ void test() {
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_data);
   aitensor_t output_tensor = AITENSOR_2D_F32(output_shape, output_data);
 
+// Test zero input
+#if DEBUG
+  float zero_input[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH] = { 0 };
+  aitensor_t zero_tensor = AITENSOR_4D_F32(single_input_shape, zero_input);
+  aitensor_t *zero_output = aialgo_forward_model(&model, &zero_tensor);
+  if (zero_output) {
+    Serial.print("Zero input probabilities: [");
+    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+      Serial.printf("%.3f", ((float *)zero_output->data)[j]);
+      if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+    }
+    Serial.println("]");
+  } else {
+    Serial.println("Zero input forward pass failed");
+  }
+#endif
+
   uint32_t correct = 0;
   for (uint32_t i = 0; i < TEST_DATASET; i++) {
     // Convert input to float
@@ -402,6 +482,16 @@ void test() {
       }
     }
 
+#if DEBUG
+    if (i < 3) {  // Print middle row pixels for first 3 images
+      Serial.printf("Image %u first 5 pixels: ", i);
+      for (int p = 28 * 14; p < 28 * 15; p++) {
+        Serial.printf("%.4f ", input_data[p]);
+      }
+      Serial.println();
+    }
+#endif
+
     // Forward pass
     aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
     if (!output_tensor_ptr) {
@@ -411,9 +501,16 @@ void test() {
 
     // Find predicted and true labels
     uint32_t predicted = 0, true_label = 0;
-    float *output_data = (float *)output_tensor_ptr->data;
-    float max_prob = output_data[0];
+    float *output_data = (float *)output_tensor_ptr->data;  // Post-softmax
+    aitensor_t dense2_output = dense2_layer.base.result;    // Pre-softmax
+    float *logits = (float *)dense2_output.data;
 #if DEBUG
+    Serial.printf("Image %u logits: [", i);
+    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+      Serial.printf("%.3f", logits[j]);
+      if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+    }
+    Serial.println("]");
     Serial.printf("Image %u probabilities: [", i);
     for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
       Serial.printf("%.3f", output_data[j]);
@@ -421,7 +518,7 @@ void test() {
     }
     Serial.println("]");
 #endif
-
+    float max_prob = output_data[0];
     for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
       float prob = output_data[j];
       if (prob > max_prob) {
@@ -432,7 +529,7 @@ void test() {
     for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
       if (pgm_read_float(&test_target_data[i][j]) == 1.0f) {
         true_label = j;
-        break;  // Exit loop once true label is found
+        break;
       }
     }
     if (predicted == true_label) {
