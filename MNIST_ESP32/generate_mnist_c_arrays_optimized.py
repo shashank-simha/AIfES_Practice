@@ -3,7 +3,7 @@ from keras.datasets import mnist
 
 # Configuration
 NUM_TRAIN = 200  # Number of training samples
-NUM_TEST = 20  # Number of test samples
+NUM_TEST = 200  # Number of test samples
 NUM_CLASSES = 10  # Number of classes
 NORMALIZED = True  # True: float (normalized), False: uint8 (raw)
 

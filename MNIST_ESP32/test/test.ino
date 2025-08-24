@@ -33,7 +33,7 @@ SET_LOOP_TASK_STACK_SIZE(270 * 1024);  // 256KB
 #define DENSE1_SIZE 64        // Dense layer neurons
 #define LAYER_COUNT 12        // Layers: input, conv1, relu1, pool1, conv2, relu2, pool2, flatten, dense1, relu3, dense2, softmax
 #define TRAIN_DATASET 200     // Number of training samples
-#define TEST_DATASET 20       // Number of test samples
+#define TEST_DATASET 200       // Number of test samples
 #define BATCH_SIZE 4          // Batch size for training
 #define EPOCHS 1              // Number of training epochs
 #define PRINT_INTERVAL 1      // Print loss every epoch
