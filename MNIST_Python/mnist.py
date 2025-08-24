@@ -35,21 +35,23 @@ loaders = {
 }
 
 
-# CNN to match ESP32 (4 conv1 filters, 8 conv2 filters, 32 dense neurons)
+# CNN to match ESP32 model (8 conv1 filters, 16 conv2 filters, 64 dense neurons, 3x3 kernels, padding)
 class CNN(nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 4, kernel_size=5, stride=1, padding=0)  # [4, 24, 24]
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # [4, 12, 12]
-        self.conv2 = nn.Conv2d(4, 8, kernel_size=5, stride=1, padding=0)  # [8, 8, 8]
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # [8, 4, 4]
-        self.fc1 = nn.Linear(8 * 4 * 4, 32)  # [32]
-        self.fc2 = nn.Linear(32, 10)  # [10]
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)  # [8, 28, 28]
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # [8, 14, 14]
+        self.conv2 = nn.Conv2d(
+            8, 16, kernel_size=3, stride=1, padding=1
+        )  # [16, 14, 14]
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # [16, 7, 7]
+        self.fc1 = nn.Linear(16 * 7 * 7, 64)  # [64]
+        self.fc2 = nn.Linear(64, 10)  # [10]
 
     def forward(self, x):
         x = F.relu(self.pool1(self.conv1(x)))
         x = F.relu(self.pool2(self.conv2(x)))
-        x = x.view(-1, 8 * 4 * 4)
+        x = x.view(-1, 16 * 7 * 7)  # Reshape to [1, 784]
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.softmax(x, dim=1)
