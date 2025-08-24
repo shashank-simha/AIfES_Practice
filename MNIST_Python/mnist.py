@@ -5,16 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Compose, Normalize
 import matplotlib.pyplot as plt
 
-# Load MNIST dataset
-train_data = datasets.MNIST(
-    root="data", train=True, transform=ToTensor(), download=True
-)
-test_data = datasets.MNIST(
-    root="data", train=False, transform=ToTensor(), download=True
-)
+# Load MNIST dataset with normalization
+transform = Compose([ToTensor(), Normalize((0.1307,), (0.3081,))])
+train_data = datasets.MNIST(root="data", train=True, transform=transform, download=True)
+test_data = datasets.MNIST(root="data", train=False, transform=transform, download=True)
 
 # Print dataset info
 print(f"training_data: {train_data}")
@@ -51,7 +48,7 @@ class CNN(nn.Module):
     def forward(self, x):
         x = F.relu(self.pool1(self.conv1(x)))
         x = F.relu(self.pool2(self.conv2(x)))
-        x = x.view(-1, 16 * 7 * 7)  # Reshape to [1, 784]
+        x = x.view(-1, 16 * 7 * 7)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.softmax(x, dim=1)
@@ -105,60 +102,51 @@ def export_weights():
         f.write(
             "#ifndef MNIST_WEIGHTS_H\n#define MNIST_WEIGHTS_H\n#include <pgmspace.h>\n\n"
         )
-
-        # Conv1 weights [4, 1, 5, 5] = 100
+        # Conv1 weights [8, 1, 3, 3] = 72
         conv1_w = model.conv1.weight.data.cpu().numpy()
         f.write(f"const float conv1_weights[{conv1_w.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in conv1_w.flatten()]))
         f.write("};\n")
-
-        # Conv1 bias [4]
+        # Conv1 bias [8]
         conv1_b = model.conv1.bias.data.cpu().numpy()
         f.write(f"const float conv1_bias[{conv1_b.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in conv1_b]))
         f.write("};\n")
-
-        # Conv2 weights [8, 4, 5, 5] = 800
+        # Conv2 weights [16, 8, 3, 3] = 1152
         conv2_w = model.conv2.weight.data.cpu().numpy()
         f.write(f"const float conv2_weights[{conv2_w.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in conv2_w.flatten()]))
         f.write("};\n")
-
-        # Conv2 bias [8]
+        # Conv2 bias [16]
         conv2_b = model.conv2.bias.data.cpu().numpy()
         f.write(f"const float conv2_bias[{conv2_b.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in conv2_b]))
         f.write("};\n")
-
-        # FC1 weights [32, 128] = 4096
+        # FC1 weights [64, 784] = 50176
         fc1_w = model.fc1.weight.data.cpu().numpy()
         f.write(f"const float fc1_weights[{fc1_w.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in fc1_w.flatten()]))
         f.write("};\n")
-
-        # FC1 bias [32]
+        # FC1 bias [64]
         fc1_b = model.fc1.bias.data.cpu().numpy()
         f.write(f"const float fc1_bias[{fc1_b.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in fc1_b]))
         f.write("};\n")
-
-        # FC2 weights [10, 32] = 320
+        # FC2 weights [10, 64] = 640
         fc2_w = model.fc2.weight.data.cpu().numpy()
         f.write(f"const float fc2_weights[{fc2_w.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in fc2_w.flatten()]))
         f.write("};\n")
-
         # FC2 bias [10]
         fc2_b = model.fc2.bias.data.cpu().numpy()
         f.write(f"const float fc2_bias[{fc2_b.size}] PROGMEM = {{")
         f.write(",".join([f"{x:.6f}" for x in fc2_b]))
         f.write("};\n")
-
         f.write("#endif")
 
 
-# Train for 10 epochs
-for epoch in range(1, 11):
+# Train for 20 epochs
+for epoch in range(1, 21):
     train(epoch)
     test()
 
