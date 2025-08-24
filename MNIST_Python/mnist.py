@@ -7,6 +7,7 @@ import torch.optim as optim
 from torchvision import datasets
 from torchvision.transforms import ToTensor, Compose, Normalize
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Load MNIST dataset with normalization
 transform = Compose([ToTensor(), Normalize((0.1307,), (0.3081,))])
@@ -102,45 +103,49 @@ def export_weights():
         f.write(
             "#ifndef MNIST_WEIGHTS_H\n#define MNIST_WEIGHTS_H\n#include <pgmspace.h>\n\n"
         )
-        # Conv1 weights [8, 1, 3, 3] = 72
-        conv1_w = model.conv1.weight.data.cpu().numpy()
+        # Conv1 weights [1, 8, 3, 3] = 72 (AIfES: in_channels, out_channels, H, W)
+        conv1_w = model.conv1.weight.data.cpu().numpy()  # [8, 1, 3, 3]
+        conv1_w = np.transpose(conv1_w, (1, 0, 2, 3))  # [1, 8, 3, 3]
         f.write(f"const float conv1_weights[{conv1_w.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in conv1_w.flatten()]))
+        f.write(",".join([f"{x:.6f}f" for x in conv1_w.flatten()]))
         f.write("};\n")
         # Conv1 bias [8]
         conv1_b = model.conv1.bias.data.cpu().numpy()
         f.write(f"const float conv1_bias[{conv1_b.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in conv1_b]))
+        f.write(",".join([f"{x:.6f}f" for x in conv1_b]))
         f.write("};\n")
-        # Conv2 weights [16, 8, 3, 3] = 1152
-        conv2_w = model.conv2.weight.data.cpu().numpy()
+        # Conv2 weights [8, 16, 3, 3] = 1152
+        conv2_w = model.conv2.weight.data.cpu().numpy()  # [16, 8, 3, 3]
+        conv2_w = np.transpose(conv2_w, (1, 0, 2, 3))  # [8, 16, 3, 3]
         f.write(f"const float conv2_weights[{conv2_w.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in conv2_w.flatten()]))
+        f.write(",".join([f"{x:.6f}f" for x in conv2_w.flatten()]))
         f.write("};\n")
         # Conv2 bias [16]
         conv2_b = model.conv2.bias.data.cpu().numpy()
         f.write(f"const float conv2_bias[{conv2_b.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in conv2_b]))
+        f.write(",".join([f"{x:.6f}f" for x in conv2_b]))
         f.write("};\n")
-        # FC1 weights [64, 784] = 50176
-        fc1_w = model.fc1.weight.data.cpu().numpy()
+        # FC1 weights [784, 64] = 50176 (AIfES: in_neurons, out_neurons)
+        fc1_w = model.fc1.weight.data.cpu().numpy()  # [64, 784]
+        fc1_w = np.transpose(fc1_w, (1, 0))  # [784, 64]
         f.write(f"const float fc1_weights[{fc1_w.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in fc1_w.flatten()]))
+        f.write(",".join([f"{x:.6f}f" for x in fc1_w.flatten()]))
         f.write("};\n")
         # FC1 bias [64]
         fc1_b = model.fc1.bias.data.cpu().numpy()
         f.write(f"const float fc1_bias[{fc1_b.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in fc1_b]))
+        f.write(",".join([f"{x:.6f}f" for x in fc1_b]))
         f.write("};\n")
-        # FC2 weights [10, 64] = 640
-        fc2_w = model.fc2.weight.data.cpu().numpy()
+        # FC2 weights [64, 10] = 640
+        fc2_w = model.fc2.weight.data.cpu().numpy()  # [10, 64]
+        fc2_w = np.transpose(fc2_w, (1, 0))  # [64, 10]
         f.write(f"const float fc2_weights[{fc2_w.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in fc2_w.flatten()]))
+        f.write(",".join([f"{x:.6f}f" for x in fc2_w.flatten()]))
         f.write("};\n")
         # FC2 bias [10]
         fc2_b = model.fc2.bias.data.cpu().numpy()
         f.write(f"const float fc2_bias[{fc2_b.size}] PROGMEM = {{")
-        f.write(",".join([f"{x:.6f}" for x in fc2_b]))
+        f.write(",".join([f"{x:.6f}f" for x in fc2_b]))
         f.write("};\n")
         f.write("#endif")
 
