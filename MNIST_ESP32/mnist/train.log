@@ -1,0 +1,390 @@
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+[2025-08-23 20:32:12.592] rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+[2025-08-23 20:32:12.595] SPIWP:0xee
+[2025-08-23 20:32:12.596] mode:DIO, clock div:1
+[2025-08-23 20:32:12.597] load:0x3fce2820,len:0x1180
+[2025-08-23 20:32:12.600] load:0x403c8700,len:0xc2c
+[2025-08-23 20:32:12.602] load:0x403cb700,len:0x311c
+[2025-08-23 20:32:12.604] entry 0x403c88b8
+[2025-08-23 20:32:12.803] 
+[2025-08-23 20:32:12.804] ##################################
+[2025-08-23 20:32:12.809] ESP32 Information:
+[2025-08-23 20:32:12.811] Internal Total Heap 389596, Internal Used Heap 294548, Internal Free Heap 95048
+[2025-08-23 20:32:12.896] Sketch Size 1047472, Free Sketch Space 1310720
+[2025-08-23 20:32:12.906] SPIRam Total heap 8388608, SPIRam Free Heap 8384060
+[2025-08-23 20:32:12.914] Chip Model ESP32-S3, ChipRevision 1, Cpu Freq 240, SDK Version v5.5-1-gb66b5448e0
+[2025-08-23 20:32:12.931] Flash Size 8388608, Flash Speed 80000000
+[2025-08-23 20:32:12.939] ##################################
+[2025-08-23 20:32:12.944] 
+[2025-08-23 20:32:12.944] 
+[2025-08-23 20:32:12.945] PSRAM initialized
+[2025-08-23 20:32:12.952] Initializing model...
+[2025-08-23 20:32:12.955] Model memory allocated: 208552 bytes, Free PSRAM: 8175036 bytes
+[2025-08-23 20:32:12.965] 
+[2025-08-23 20:32:12.966] -------------- Model structure ---------------
+[2025-08-23 20:32:12.975] 1: Input (F32) <Dim: 4; Shape: [1, 1, 28, 28]>
+[2025-08-23 20:32:12.985] 2: Conv2D (F32) <filter_count: 8; kernel_size: (3, 3); stride: (1, 1); dilation: (1, 1); padding: (1, 1); channel_axis: 1>
+[2025-08-23 20:32:13.033] 3: ReLU (F32) <>
+[2025-08-23 20:32:13.041] 4: MaxPool2D (F32) <pool_size: (2, 2); stride: (2, 2); padding: (0, 0); channel_axis: 1>
+[2025-08-23 20:32:13.063] 5: Conv2D (F32) <filter_count: 16; kernel_size: (3, 3); stride: (1, 1); dilation: (1, 1); padding: (1, 1); channel_axis: 1>
+[2025-08-23 20:32:13.086] 6: ReLU (F32) <>
+[2025-08-23 20:32:13.091] 7: MaxPool2D (F32) <pool_size: (2, 2); stride: (2, 2); padding: (0, 0); channel_axis: 1>
+[2025-08-23 20:32:13.105] 8: Reshape (F32) <output_shape: [1, 784]>
+[2025-08-23 20:32:13.111] 9: Dense (F32) <neurons: 64>
+[2025-08-23 20:32:13.117] 10: ReLU (F32) <>
+[2025-08-23 20:32:13.122] 11: Dense (F32) <neurons: 10>
+[2025-08-23 20:32:13.126] 12: Softmax (F32) <>
+[2025-08-23 20:32:13.129] ----------------------------------------------
+[2025-08-23 20:32:13.144] 
+[2025-08-23 20:32:13.144] Model initialized
+[2025-08-23 20:32:13.149] Type >t< or >infer<
+[2025-08-23 20:32:19.040] Training...
+[2025-08-23 20:32:19.043] Free SRAM before: 94684 bytes
+[2025-08-23 20:32:19.047] 
+[2025-08-23 20:32:19.047] Loss specs:
+[2025-08-23 20:32:19.049] Cross-Entropy (F32) <>
+[2025-08-23 20:32:19.056] Optimizer specs:
+[2025-08-23 20:32:19.059] SGS (F32) <lr: 0.00 (F32); momentum: 0.00 (F32)>
+[2025-08-23 20:32:19.092] Parameters initialized
+[2025-08-23 20:32:19.102] Training memory allocated: 507224 bytes, Free PSRAM: 7667128 bytes
+[2025-08-23 20:32:19.115] First train pixel: -0.4242
+[2025-08-23 20:32:19.120] Input tensor shape: [200,1,28,28]
+[2025-08-23 20:32:19.131] Target tensor shape: [200,10]
+[2025-08-23 20:32:19.138] Free SRAM after tensors: 94420 bytes
+[2025-08-23 20:32:19.149] Testing forward pass
+[2025-08-23 20:32:19.227] Forward pass completed
+[2025-08-23 20:32:19.236] Start training
+[2025-08-23 20:32:19.242] Before train_model
+[2025-08-23 20:33:41.515] After train_model
+[2025-08-23 20:34:07.305] Epoch 0: test loss: 824.75
+[2025-08-23 20:34:07.310] Before train_model
+[2025-08-23 20:35:29.594] After train_model
+[2025-08-23 20:35:55.383] Epoch 1: test loss: 624.52
+[2025-08-23 20:35:55.388] Before train_model
+[2025-08-23 20:37:17.673] After train_model
+[2025-08-23 20:37:43.463] Epoch 2: test loss: 502.32
+[2025-08-23 20:37:43.469] Before train_model
+[2025-08-23 20:39:05.753] After train_model
+[2025-08-23 20:39:31.543] Epoch 3: test loss: 429.04
+[2025-08-23 20:39:31.551] Before train_model
+[2025-08-23 20:40:53.833] After train_model
+[2025-08-23 20:41:19.623] Epoch 4: test loss: 371.71
+[2025-08-23 20:41:19.629] Before train_model
+[2025-08-23 20:42:41.914] After train_model
+[2025-08-23 20:43:07.704] Epoch 5: test loss: 319.01
+[2025-08-23 20:43:07.707] Before train_model
+[2025-08-23 20:44:29.994] After train_model
+[2025-08-23 20:44:55.784] Epoch 6: test loss: 275.43
+[2025-08-23 20:44:55.786] Before train_model
+[2025-08-23 20:46:18.075] After train_model
+[2025-08-23 20:46:43.865] Epoch 7: test loss: 244.38
+[2025-08-23 20:46:43.868] Before train_model
+[2025-08-23 20:48:06.156] After train_model
+[2025-08-23 20:48:31.945] Epoch 8: test loss: 214.69
+[2025-08-23 20:48:31.952] Before train_model
+[2025-08-23 20:49:54.236] After train_model
+[2025-08-23 20:50:20.026] Epoch 9: test loss: 191.43
+[2025-08-23 20:50:20.028] Before train_model
+[2025-08-23 20:51:42.316] After train_model
+[2025-08-23 20:52:08.106] Epoch 10: test loss: 172.85
+[2025-08-23 20:52:08.116] Before train_model
+[2025-08-23 20:53:30.396] After train_model
+[2025-08-23 20:53:56.186] Epoch 11: test loss: 156.00
+[2025-08-23 20:53:56.192] Before train_model
+[2025-08-23 20:55:18.477] After train_model
+[2025-08-23 20:55:44.266] Epoch 12: test loss: 142.59
+[2025-08-23 20:55:44.272] Before train_model
+[2025-08-23 20:57:06.557] After train_model
+[2025-08-23 20:57:32.346] Epoch 13: test loss: 128.90
+[2025-08-23 20:57:32.353] Before train_model
+[2025-08-23 20:58:54.637] After train_model
+[2025-08-23 20:59:20.427] Epoch 14: test loss: 115.47
+[2025-08-23 20:59:20.435] Before train_model
+[2025-08-23 21:00:42.719] After train_model
+[2025-08-23 21:01:08.509] Epoch 15: test loss: 105.82
+[2025-08-23 21:01:08.514] Before train_model
+[2025-08-23 21:02:30.800] After train_model
+[2025-08-23 21:02:56.590] Epoch 16: test loss: 95.08
+[2025-08-23 21:02:56.596] Before train_model
+[2025-08-23 21:04:18.881] After train_model
+[2025-08-23 21:04:44.671] Epoch 17: test loss: 84.41
+[2025-08-23 21:04:44.677] Before train_model
+[2025-08-23 21:06:06.963] After train_model
+[2025-08-23 21:06:32.753] Epoch 18: test loss: 77.01
+[2025-08-23 21:06:32.755] Before train_model
+[2025-08-23 21:07:55.044] After train_model
+[2025-08-23 21:08:20.834] Epoch 19: test loss: 69.46
+[2025-08-23 21:08:20.843] Before train_model
+[2025-08-23 21:09:43.125] After train_model
+[2025-08-23 21:10:08.915] Epoch 20: test loss: 63.89
+[2025-08-23 21:10:08.921] Before train_model
+[2025-08-23 21:11:31.207] After train_model
+[2025-08-23 21:11:56.996] Epoch 21: test loss: 57.57
+[2025-08-23 21:11:57.004] Before train_model
+[2025-08-23 21:13:19.288] After train_model
+[2025-08-23 21:13:45.078] Epoch 22: test loss: 49.90
+[2025-08-23 21:13:45.084] Before train_model
+[2025-08-23 21:15:07.369] After train_model
+[2025-08-23 21:15:33.160] Epoch 23: test loss: 43.29
+[2025-08-23 21:15:33.165] Before train_model
+[2025-08-23 21:16:55.449] After train_model
+[2025-08-23 21:17:21.238] Epoch 24: test loss: 37.51
+[2025-08-23 21:17:21.245] Before train_model
+[2025-08-23 21:18:43.528] After train_model
+[2025-08-23 21:19:09.318] Epoch 25: test loss: 31.35
+[2025-08-23 21:19:09.323] Before train_model
+[2025-08-23 21:20:31.607] After train_model
+[2025-08-23 21:20:57.397] Epoch 26: test loss: 26.95
+[2025-08-23 21:20:57.402] Before train_model
+[2025-08-23 21:22:19.687] After train_model
+[2025-08-23 21:22:45.477] Epoch 27: test loss: 22.15
+[2025-08-23 21:22:45.480] Before train_model
+[2025-08-23 21:24:07.767] After train_model
+[2025-08-23 21:24:33.557] Epoch 28: test loss: 18.39
+[2025-08-23 21:24:33.562] Before train_model
+[2025-08-23 21:25:55.847] After train_model
+[2025-08-23 21:26:21.637] Epoch 29: test loss: 14.68
+[2025-08-23 21:26:21.638] Before train_model
+[2025-08-23 21:27:43.927] After train_model
+[2025-08-23 21:28:09.718] Epoch 30: test loss: 12.11
+[2025-08-23 21:28:09.723] Before train_model
+[2025-08-23 21:29:32.008] After train_model
+[2025-08-23 21:29:57.798] Epoch 31: test loss: 9.68
+[2025-08-23 21:29:57.803] Before train_model
+[2025-08-23 21:31:20.088] After train_model
+[2025-08-23 21:31:45.879] Epoch 32: test loss: 7.75
+[2025-08-23 21:31:45.883] Before train_model
+[2025-08-23 21:33:08.169] After train_model
+[2025-08-23 21:33:33.959] Epoch 33: test loss: 6.40
+[2025-08-23 21:33:33.965] Before train_model
+[2025-08-23 21:34:56.250] After train_model
+[2025-08-23 21:35:22.040] Epoch 34: test loss: 5.32
+[2025-08-23 21:35:22.045] Before train_model
+[2025-08-23 21:36:44.331] After train_model
+[2025-08-23 21:37:10.121] Epoch 35: test loss: 4.45
+[2025-08-23 21:37:10.125] Before train_model
+[2025-08-23 21:38:32.412] After train_model
+[2025-08-23 21:38:58.202] Epoch 36: test loss: 3.83
+[2025-08-23 21:38:58.207] Before train_model
+[2025-08-23 21:40:20.492] After train_model
+[2025-08-23 21:40:46.282] Epoch 37: test loss: 3.34
+[2025-08-23 21:40:46.284] Before train_model
+[2025-08-23 21:42:08.573] After train_model
+[2025-08-23 21:42:34.363] Epoch 38: test loss: 2.97
+[2025-08-23 21:42:34.366] Before train_model
+[2025-08-23 21:43:56.654] After train_model
+[2025-08-23 21:44:22.444] Epoch 39: test loss: 2.66
+[2025-08-23 21:44:22.449] Before train_model
+[2025-08-23 21:45:44.735] After train_model
+[2025-08-23 21:46:10.525] Epoch 40: test loss: 2.44
+[2025-08-23 21:46:10.530] Before train_model
+[2025-08-23 21:47:32.816] After train_model
+[2025-08-23 21:47:58.606] Epoch 41: test loss: 2.23
+[2025-08-23 21:47:58.614] Before train_model
+[2025-08-23 21:49:20.897] After train_model
+[2025-08-23 21:49:46.687] Epoch 42: test loss: 2.02
+[2025-08-23 21:49:46.696] Before train_model
+[2025-08-23 21:51:08.978] After train_model
+[2025-08-23 21:51:34.768] Epoch 43: test loss: 1.89
+[2025-08-23 21:51:34.771] Before train_model
+[2025-08-23 21:52:57.060] After train_model
+[2025-08-23 21:53:22.850] Epoch 44: test loss: 1.76
+[2025-08-23 21:53:22.855] Before train_model
+[2025-08-23 21:54:45.141] After train_model
+[2025-08-23 21:55:10.931] Epoch 45: test loss: 1.64
+[2025-08-23 21:55:10.937] Before train_model
+[2025-08-23 21:56:33.223] After train_model
+[2025-08-23 21:56:59.013] Epoch 46: test loss: 1.55
+[2025-08-23 21:56:59.019] Before train_model
+[2025-08-23 21:58:21.304] After train_model
+[2025-08-23 21:58:47.094] Epoch 47: test loss: 1.47
+[2025-08-23 21:58:47.096] Before train_model
+[2025-08-23 22:00:09.386] After train_model
+[2025-08-23 22:00:35.176] Epoch 48: test loss: 1.38
+[2025-08-23 22:00:35.183] Before train_model
+[2025-08-23 22:01:57.467] After train_model
+[2025-08-23 22:02:23.257] Epoch 49: test loss: 1.31
+[2025-08-23 22:02:23.262] Before train_model
+[2025-08-23 22:03:45.548] After train_model
+[2025-08-23 22:04:11.338] Epoch 50: test loss: 1.25
+[2025-08-23 22:04:11.344] Before train_model
+[2025-08-23 22:05:33.629] After train_model
+[2025-08-23 22:05:59.419] Epoch 51: test loss: 1.19
+[2025-08-23 22:05:59.425] Before train_model
+[2025-08-23 22:07:21.710] After train_model
+[2025-08-23 22:07:47.500] Epoch 52: test loss: 1.14
+[2025-08-23 22:07:47.505] Before train_model
+[2025-08-23 22:09:09.791] After train_model
+[2025-08-23 22:09:35.581] Epoch 53: test loss: 1.09
+[2025-08-23 22:09:35.586] Before train_model
+[2025-08-23 22:10:57.872] After train_model
+[2025-08-23 22:11:23.662] Epoch 54: test loss: 1.05
+[2025-08-23 22:11:23.667] Before train_model
+[2025-08-23 22:12:45.953] After train_model
+[2025-08-23 22:13:11.743] Epoch 55: test loss: 1.01
+[2025-08-23 22:13:11.748] Before train_model
+[2025-08-23 22:14:34.034] After train_model
+[2025-08-23 22:14:59.823] Epoch 56: test loss: 0.97
+[2025-08-23 22:14:59.829] Before train_model
+[2025-08-23 22:16:22.115] After train_model
+[2025-08-23 22:16:47.905] Epoch 57: test loss: 0.94
+[2025-08-23 22:16:47.910] Before train_model
+[2025-08-23 22:18:10.196] After train_model
+[2025-08-23 22:18:35.986] Epoch 58: test loss: 0.90
+[2025-08-23 22:18:35.991] Before train_model
+[2025-08-23 22:19:58.277] After train_model
+[2025-08-23 22:20:24.067] Epoch 59: test loss: 0.88
+[2025-08-23 22:20:24.071] Before train_model
+[2025-08-23 22:21:46.358] After train_model
+[2025-08-23 22:22:12.147] Epoch 60: test loss: 0.85
+[2025-08-23 22:22:12.152] Before train_model
+[2025-08-23 22:23:34.439] After train_model
+[2025-08-23 22:24:00.228] Epoch 61: test loss: 0.82
+[2025-08-23 22:24:00.230] Before train_model
+[2025-08-23 22:25:22.520] After train_model
+[2025-08-23 22:25:48.309] Epoch 62: test loss: 0.79
+[2025-08-23 22:25:48.314] Before train_model
+[2025-08-23 22:27:10.601] After train_model
+[2025-08-23 22:27:36.391] Epoch 63: test loss: 0.77
+[2025-08-23 22:27:36.396] Before train_model
+[2025-08-23 22:28:58.683] After train_model
+[2025-08-23 22:29:24.472] Epoch 64: test loss: 0.75
+[2025-08-23 22:29:24.477] Before train_model
+[2025-08-23 22:30:46.763] After train_model
+[2025-08-23 22:31:12.553] Epoch 65: test loss: 0.72
+[2025-08-23 22:31:12.556] Before train_model
+[2025-08-23 22:32:34.845] After train_model
+[2025-08-23 22:33:00.634] Epoch 66: test loss: 0.71
+[2025-08-23 22:33:00.639] Before train_model
+[2025-08-23 22:34:22.926] After train_model
+[2025-08-23 22:34:48.716] Epoch 67: test loss: 0.69
+[2025-08-23 22:34:48.720] Before train_model
+[2025-08-23 22:36:11.007] After train_model
+[2025-08-23 22:36:36.797] Epoch 68: test loss: 0.67
+[2025-08-23 22:36:36.802] Before train_model
+[2025-08-23 22:37:59.088] After train_model
+[2025-08-23 22:38:24.878] Epoch 69: test loss: 0.65
+[2025-08-23 22:38:24.883] Before train_model
+[2025-08-23 22:39:47.169] After train_model
+[2025-08-23 22:40:12.959] Epoch 70: test loss: 0.63
+[2025-08-23 22:40:12.960] Before train_model
+[2025-08-23 22:41:35.250] After train_model
+[2025-08-23 22:42:01.040] Epoch 71: test loss: 0.62
+[2025-08-23 22:42:01.045] Before train_model
+[2025-08-23 22:43:23.331] After train_model
+[2025-08-23 22:43:49.121] Epoch 72: test loss: 0.60
+[2025-08-23 22:43:49.126] Before train_model
+[2025-08-23 22:45:11.412] After train_model
+[2025-08-23 22:45:37.202] Epoch 73: test loss: 0.59
+[2025-08-23 22:45:37.208] Before train_model
+[2025-08-23 22:46:59.493] After train_model
+[2025-08-23 22:47:25.283] Epoch 74: test loss: 0.58
+[2025-08-23 22:47:25.288] Before train_model
+[2025-08-23 22:48:47.574] After train_model
+[2025-08-23 22:49:13.364] Epoch 75: test loss: 0.56
+[2025-08-23 22:49:13.368] Before train_model
+[2025-08-23 22:50:35.655] After train_model
+[2025-08-23 22:51:01.445] Epoch 76: test loss: 0.55
+[2025-08-23 22:51:01.452] Before train_model
+[2025-08-23 22:52:23.736] After train_model
+[2025-08-23 22:52:49.526] Epoch 77: test loss: 0.54
+[2025-08-23 22:52:49.532] Before train_model
+[2025-08-23 22:54:11.817] After train_model
+[2025-08-23 22:54:37.607] Epoch 78: test loss: 0.53
+[2025-08-23 22:54:37.613] Before train_model
+[2025-08-23 22:55:59.898] After train_model
+[2025-08-23 22:56:25.688] Epoch 79: test loss: 0.52
+[2025-08-23 22:56:25.693] Before train_model
+[2025-08-23 22:57:47.979] After train_model
+[2025-08-23 22:58:13.769] Epoch 80: test loss: 0.51
+[2025-08-23 22:58:13.774] Before train_model
+[2025-08-23 22:59:36.060] After train_model
+[2025-08-23 23:00:01.850] Epoch 81: test loss: 0.50
+[2025-08-23 23:00:01.855] Before train_model
+[2025-08-23 23:01:24.142] After train_model
+[2025-08-23 23:01:49.931] Epoch 82: test loss: 0.49
+[2025-08-23 23:01:49.936] Before train_model
+[2025-08-23 23:03:12.222] After train_model
+[2025-08-23 23:03:38.012] Epoch 83: test loss: 0.48
+[2025-08-23 23:03:38.017] Before train_model
+[2025-08-23 23:05:00.303] After train_model
+[2025-08-23 23:05:26.093] Epoch 84: test loss: 0.47
+[2025-08-23 23:05:26.098] Before train_model
+[2025-08-23 23:06:48.385] After train_model
+[2025-08-23 23:07:14.175] Epoch 85: test loss: 0.46
+[2025-08-23 23:07:14.179] Before train_model
+[2025-08-23 23:08:36.466] After train_model
+[2025-08-23 23:09:02.256] Epoch 86: test loss: 0.46
+[2025-08-23 23:09:02.262] Before train_model
+[2025-08-23 23:10:24.547] After train_model
+[2025-08-23 23:10:50.337] Epoch 87: test loss: 0.45
+[2025-08-23 23:10:50.342] Before train_model
+[2025-08-23 23:12:12.628] After train_model
+[2025-08-23 23:12:38.418] Epoch 88: test loss: 0.44
+[2025-08-23 23:12:38.425] Before train_model
+[2025-08-23 23:14:00.709] After train_model
+[2025-08-23 23:14:26.499] Epoch 89: test loss: 0.43
+[2025-08-23 23:14:26.504] Before train_model
+[2025-08-23 23:15:48.790] After train_model
+[2025-08-23 23:16:14.580] Epoch 90: test loss: 0.43
+[2025-08-23 23:16:14.586] Before train_model
+[2025-08-23 23:17:36.871] After train_model
+[2025-08-23 23:18:02.662] Epoch 91: test loss: 0.42
+[2025-08-23 23:18:02.667] Before train_model
+[2025-08-23 23:19:24.953] After train_model
+[2025-08-23 23:19:50.743] Epoch 92: test loss: 0.41
+[2025-08-23 23:19:50.748] Before train_model
+[2025-08-23 23:21:13.034] After train_model
+[2025-08-23 23:21:38.823] Epoch 93: test loss: 0.40
+[2025-08-23 23:21:38.828] Before train_model
+[2025-08-23 23:23:01.115] After train_model
+[2025-08-23 23:23:26.905] Epoch 94: test loss: 0.40
+[2025-08-23 23:23:26.910] Before train_model
+[2025-08-23 23:24:49.196] After train_model
+[2025-08-23 23:25:14.986] Epoch 95: test loss: 0.39
+[2025-08-23 23:25:14.991] Before train_model
+[2025-08-23 23:26:37.277] After train_model
+[2025-08-23 23:27:03.067] Epoch 96: test loss: 0.38
+[2025-08-23 23:27:03.069] Before train_model
+[2025-08-23 23:28:25.359] After train_model
+[2025-08-23 23:28:51.148] Epoch 97: test loss: 0.38
+[2025-08-23 23:28:51.153] Before train_model
+[2025-08-23 23:30:13.440] After train_model
+[2025-08-23 23:30:39.229] Epoch 98: test loss: 0.37
+[2025-08-23 23:30:39.234] Before train_model
+[2025-08-23 23:32:01.521] After train_model
+[2025-08-23 23:32:27.315] Epoch 99: test loss: 0.37
+[2025-08-23 23:32:27.321] Finished training
+[2025-08-23 23:32:27.323] Training memory freed, Free PSRAM: 8175036 bytes
+[2025-08-23 23:32:27.329] Testing...
+[2025-08-23 23:32:27.331] Free SRAM before: 94420 bytes
+[2025-08-23 23:32:27.335] First test pixel: -0.4242
+[2025-08-23 23:32:27.338] Input tensor shape: [20,1,28,28]
+[2025-08-23 23:32:27.342] Target tensor shape: [20,10]
+[2025-08-23 23:32:27.346] Free SRAM after tensors: 94420 bytes
+[2025-08-23 23:32:27.350] Testing forward pass
+[2025-08-23 23:32:27.465] Forward pass completed
+[2025-08-23 23:32:27.470] Test image 0: Predicted=0, True=0, Correct=Yes
+[2025-08-23 23:32:27.477] Test image 1: Predicted=3, True=0, Correct=No
+[2025-08-23 23:32:27.483] Test image 2: Predicted=0, True=1, Correct=No
+[2025-08-23 23:32:27.488] Test image 3: Predicted=5, True=1, Correct=No
+[2025-08-23 23:32:27.494] Test image 4: Predicted=0, True=2, Correct=No
+[2025-08-23 23:32:27.499] Test image 5: Predicted=2, True=2, Correct=Yes
+[2025-08-23 23:32:27.505] Test image 6: Predicted=9, True=3, Correct=No
+[2025-08-23 23:32:27.511] Test image 7: Predicted=2, True=3, Correct=No
+[2025-08-23 23:32:27.516] Test image 8: Predicted=6, True=4, Correct=No
+[2025-08-23 23:32:27.520] Test image 9: Predicted=9, True=4, Correct=No
+[2025-08-23 23:32:27.523] Test image 10: Predicted=4, True=5, Correct=No
+[2025-08-23 23:32:27.526] Test image 11: Predicted=1, True=5, Correct=No
+[2025-08-23 23:32:27.529] Test image 12: Predicted=3, True=6, Correct=No
+[2025-08-23 23:32:27.531] Test image 13: Predicted=3, True=6, Correct=No
+[2025-08-23 23:32:27.533] Test image 14: Predicted=2, True=7, Correct=No
+[2025-08-23 23:32:27.535] Test image 15: Predicted=9, True=7, Correct=No
+[2025-08-23 23:32:27.537] Test image 16: Predicted=0, True=8, Correct=No
+[2025-08-23 23:32:27.539] Test image 17: Predicted=2, True=8, Correct=No
+[2025-08-23 23:32:27.541] Test image 18: Predicted=2, True=9, Correct=No
+[2025-08-23 23:32:27.543] Test image 19: Predicted=3, True=9, Correct=No
+[2025-08-23 23:32:27.545] Testing completed, Accuracy: 10.00% (2/20)
+[2025-08-23 23:32:27.546] Free SRAM after: 94420 bytes
+[2025-08-24 07:02:07.791] Unknown command

@@ -3,18 +3,18 @@
 #include "mnist_data.h"
 
 // Enable debug logs (set to 0 to disable verbose logs like tensor shapes, per-image copy)
-#define DEBUG 0
+#define DEBUG 1
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
-SET_LOOP_TASK_STACK_SIZE(128 * 1024);  // 128KB
+SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 128KB
 
 // Model and training constants
 #define INPUT_CHANNELS 1  // Grayscale images
 #define INPUT_HEIGHT 28   // Image height
 #define INPUT_WIDTH 28    // Image width
 #define OUTPUT_SIZE 10    // Number of classes (digits 0-9)
-#define CONV1_FILTERS 4   // Conv1 output channels
-#define CONV2_FILTERS 8   // Conv2 output channels
+#define CONV1_FILTERS 8   // Conv1 output channels
+#define CONV2_FILTERS 16   // Conv2 output channels
 #define KERNEL_SIZE \
   { 3, 3 }  // Convolution kernel size
 #define STRIDE \
@@ -29,12 +29,12 @@ SET_LOOP_TASK_STACK_SIZE(128 * 1024);  // 128KB
   { 2, 2 }  // Max pooling stride
 #define POOL_PADDING \
   { 0, 0 }                    // Max pooling padding
-#define DENSE1_SIZE 32        // Dense layer neurons
+#define DENSE1_SIZE 64        // Dense layer neurons
 #define LAYER_COUNT 12        // Layers: input, conv1, relu1, pool1, conv2, relu2, pool2, flatten, dense1, relu3, dense2, softmax
 #define TRAIN_DATASET 200     // Number of training samples
 #define TEST_DATASET 20       // Number of test samples
-#define BATCH_SIZE 1          // Batch size for training
-#define EPOCHS 100             // Number of training epochs
+#define BATCH_SIZE 4          // Batch size for training
+#define EPOCHS 100              // Number of training epochs
 #define PRINT_INTERVAL 1      // Print loss every epoch
 #define LEARNING_RATE 0.001f  // SGD learning rate
 
@@ -365,7 +365,7 @@ void test() {
         predicted = j;
       }
       for (uint32_t j = 0; j < 10; j++) {  // Changed from j=1 to j=0
-        if (pgm_read_float(&test_target_data[i * 10 + j]) == 1.0f) {
+        if (pgm_read_float(&test_target_data[i][j]) == 1.0f) {
           true_label = j;
           break;  // Exit loop once true label is found
         }
