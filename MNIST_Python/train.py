@@ -9,13 +9,13 @@ from torchvision.transforms import Compose, ToTensor, Normalize
 import numpy as np
 
 # Configuration
-NORMALIZED = False  # False: uint8_t [0, 255], True: float normalized (mu=0.1307, sigma=0.3081)
+NORMALIZED = True  # False: uint8_t [0, 255], True: float normalized (mu=0.1307, sigma=0.3081)
 NUM_TRAIN_SUBSET = 200  # Training samples for ESP32 (20 per class)
 NUM_TEST_SUBSET = 20    # Test samples for ESP32 (2 per class)
 NUM_CLASSES = 10        # Number of classes (0-9)
 
-# Load full MNIST dataset for training
-transform = Compose([ToTensor()]) if not NORMALIZED else Compose([ToTensor(), Normalize((0.1307,), (0.3081,))])
+# Load full MNIST dataset
+transform = Compose([ToTensor()])  # Load as float [0, 1]
 train_data = datasets.MNIST(root="data", train=True, transform=transform, download=True)
 test_data = datasets.MNIST(root="data", train=False, transform=transform, download=True)
 
@@ -38,7 +38,7 @@ train_labels_subset = train_data.targets[train_idx].numpy()
 test_images_subset = test_data.data[test_idx].numpy()     # [20, 28, 28]
 test_labels_subset = test_data.targets[test_idx].numpy()
 
-# Convert subset images to uint8 [0, 255] or float normalized
+# Convert subset images
 if NORMALIZED:
     train_images_subset = (train_images_subset.astype(np.float32) / 255.0 - 0.1307) / 0.3081
     test_images_subset = (test_images_subset.astype(np.float32) / 255.0 - 0.1307) / 0.3081
@@ -62,17 +62,20 @@ print(f"Input type for ESP32: {'float (normalized)' if NORMALIZED else 'uint8_t 
 
 # Custom dataset for full training
 class CustomMNIST(torch.utils.data.Dataset):
-    def __init__(self, data, targets):
+    def __init__(self, data, targets, normalized=NORMALIZED):
         self.data = data
         self.targets = targets
+        self.normalized = normalized
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
         img = self.data[idx]
-        if not NORMALIZED:  # Convert uint8 [0, 255] to float [0, 1]
-            img = img.astype(np.float32) / 255.0
+        if self.normalized:
+            img = (img.astype(np.float32) / 255.0 - 0.1307) / 0.3081
+        else:
+            img = img.astype(np.float32)  # Convert uint8 [0, 255] to float [0, 255]
         img = torch.tensor(img, dtype=torch.float32).unsqueeze(0)  # [1, 28, 28]
         label = torch.tensor(self.targets[idx], dtype=torch.long)
         return img, label
@@ -80,13 +83,13 @@ class CustomMNIST(torch.utils.data.Dataset):
 # Data loaders for full dataset
 loaders = {
     "train": torch.utils.data.DataLoader(
-        CustomMNIST(train_data.data.numpy(), train_data.targets.numpy()),
+        CustomMNIST(train_data.data.numpy(), train_data.targets.numpy(), normalized=NORMALIZED),
         batch_size=100,
         shuffle=True,
         num_workers=1
     ),
     "test": torch.utils.data.DataLoader(
-        CustomMNIST(test_data.data.numpy(), test_data.targets.numpy()),
+        CustomMNIST(test_data.data.numpy(), test_data.targets.numpy(), normalized=NORMALIZED),
         batch_size=100,
         shuffle=False,
         num_workers=1
