@@ -137,7 +137,7 @@ if __name__ == "__main__":
     model = CNN()
     load_weights(model)
     input_tensor, target_tensor = load_data()
-    print_layers = ['pool2']  # Specify layers to dump into file
+    print_layers = ['relu3']  # Specify layers to dump into file
     num_inputs = 1  # Only first N inputs go to file
     inference(model, input_tensor, target_tensor, num_inputs, print_layers)
     print("Layer outputs written to output_python.txt")
