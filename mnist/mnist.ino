@@ -22,7 +22,7 @@
 #define DENSE1_SIZE 64
 #define OUTPUT_SIZE 10        // For softmax
 #define LAYER_COUNT 11        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 → softmax
-#define TEST_DATASET 20        // One image
+#define TEST_DATASET 20
 
 // Global model variables
 aimodel_t model;
@@ -115,9 +115,9 @@ void init_model() {
   Serial.println(F("Model initialized"));
 }
 
-// Test on multiple images
+// Test on multiple images with accuracy
 void test() {
-  Serial.printf(F("Testing %d images up to Softmax...\n"), TEST_DATASET);
+  Serial.printf(F("Testing %d images...\n"), TEST_DATASET);
 
   uint32_t inference_memory_size = aialgo_sizeof_inference_memory(&model);
   void *inference_memory = ps_malloc(inference_memory_size);
@@ -139,7 +139,8 @@ void test() {
   const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_buffer);
 
-  // Loop over all test images
+  uint32_t correct_count = 0;
+
   for (uint32_t img_idx = 0; img_idx < TEST_DATASET; img_idx++) {
 
     // Load test input image from PROGMEM
@@ -159,30 +160,44 @@ void test() {
       continue;
     }
 
-    // Print runtime shape
     float *output_data_ptr = (float *)output_tensor_ptr->data;
     uint32_t out_size = 1;
-    Serial.printf("Image %d Softmax output shape: [", img_idx);
-    for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) {
-      Serial.printf("%u", output_tensor_ptr->shape[d]);
-      out_size *= output_tensor_ptr->shape[d];
-      if (d < output_tensor_ptr->dim - 1) Serial.print(", ");
-    }
-    Serial.println("]");
+    for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) out_size *= output_tensor_ptr->shape[d];
 
-    // Print values
-    Serial.print("Softmax output: [");
-    for (uint32_t i = 0; i < out_size; i++) {
-      Serial.printf("%.6f", output_data_ptr[i]);
-      if (i < out_size - 1) Serial.print(", ");
+    // Determine predicted class (argmax)
+    uint32_t pred_class = 0;
+    float max_val = output_data_ptr[0];
+    for (uint32_t i = 1; i < out_size; i++) {
+      if (output_data_ptr[i] > max_val) {
+        max_val = output_data_ptr[i];
+        pred_class = i;
+      }
     }
-    Serial.println("]\n");
+
+    // Get actual target class from PROGMEM one-hot vector
+    uint32_t target_class = 0;
+    for (uint32_t i = 0; i < 10; i++) {
+        float val = pgm_read_float(&test_target_data[img_idx][i]);
+        if (val == 1.0f) {
+            target_class = i;
+            break;
+        }
+    }
+    bool matches = (pred_class == target_class);
+    if (matches) correct_count++;
+
+    Serial.printf("Image %d: Predicted: %u, Actual: %u, Correct: %s\n",
+                  img_idx, pred_class, target_class, matches ? "YES" : "NO");
   }
+
+  float accuracy = 100.0f * correct_count / TEST_DATASET;
+  Serial.printf("Accuracy: %u/%u (%.2f%%)\n", correct_count, TEST_DATASET, accuracy);
 
   free(input_buffer);
   free(inference_memory);
   Serial.println(F("Memory freed after inference"));
 }
+
 
 
 // Setup
