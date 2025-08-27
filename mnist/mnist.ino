@@ -19,9 +19,10 @@
 #define POOL_SIZE {2, 2}
 #define POOL_STRIDE {2, 2}
 #define POOL_PADDING {0, 0}
-#define DENSE1_SIZE 64  
-#define LAYER_COUNT 10   // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3
-#define TEST_DATASET 1   // One image
+#define DENSE1_SIZE 64
+#define NUM_CLASSES 10
+#define LAYER_COUNT 11   // Added dense2 layer
+#define TEST_DATASET 1
 
 // Global model variables
 aimodel_t model;
@@ -30,6 +31,7 @@ ailayer_t *layers[LAYER_COUNT];
 // Layer structures
 uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
 ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);
+
 ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weights, conv1_bias);
 ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_M();
 ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
@@ -41,6 +43,9 @@ ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_ST
 ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_M();
 ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, fc1_weights, fc1_bias);
 ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_M();
+
+// New dense2 layer → final output
+ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(NUM_CLASSES, fc2_weights, fc2_bias);
 
 // Initialize layers
 void init_layers() {
@@ -66,7 +71,10 @@ void init_layers() {
 
   layers[8] = ailayer_dense_f32_default(&dense1_layer, layers[7]);
 
-  layers[9] = model.output_layer = ailayer_relu_f32_default(&relu3_layer, layers[8]);
+  layers[9] = ailayer_relu_f32_default(&relu3_layer, layers[8]);
+
+  // New final dense layer
+  layers[10] = model.output_layer = ailayer_dense_f32_default(&dense2_layer, layers[9]);
 
   if (!model.output_layer) {
     Serial.println(F("Layer init failed"));
@@ -88,7 +96,7 @@ void init_model() {
 
 // Test on one image
 void test() {
-  Serial.println(F("Testing up to ReLU3..."));
+  Serial.println(F("Testing up to Dense2..."));
 
   // Allocate inference memory
   uint32_t inference_memory_size = aialgo_sizeof_inference_memory(&model);
@@ -132,7 +140,7 @@ void test() {
   // Print shape and values
   float *output_data_ptr = (float *)output_tensor_ptr->data;
   uint32_t out_size = 1;
-  Serial.print("ReLU3 output shape: [");
+  Serial.print("Dense2 output shape: [");
   for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) {
     Serial.printf("%u", output_tensor_ptr->shape[d]);
     out_size *= output_tensor_ptr->shape[d];
@@ -140,7 +148,7 @@ void test() {
   }
   Serial.println("]");
 
-  Serial.print("ReLU3 output: [");
+  Serial.print("Dense2 output: [");
   for (uint32_t i = 0; i < out_size; i++) {
     Serial.printf("%.6f", output_data_ptr[i]);
     if (i < out_size - 1) Serial.print(",");

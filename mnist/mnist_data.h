@@ -644,7 +644,7 @@ const float test_input_data[20][1][28][28] PROGMEM = {
   }
 };
 
-const float test_target_data[20][10] = {
+const float test_target_data[20][10] PROGMEM = {
   {1.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f},
   {1.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f},
   {0.0f,1.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f},

@@ -32,13 +32,14 @@ class CNN(nn.Module):
 def parse_c_array(file_path, array_name, expected_size):
     with open(file_path, 'r') as f:
         content = f.read()
-    pattern = rf'{array_name}\s*\[.*?\]\s*=\s*\{{(.*?)\}};'
+    # Updated regex to handle optional 'const' and 'PROGMEM' before the type
+    pattern = rf'(?:const\s+)?float\s+{array_name}\s*(?:\[[^\]]*\]\s*)*\s*(?:PROGMEM\s*)?=\s*\{{(.*?)\}};'
     match = re.search(pattern, content, re.DOTALL)
     if not match:
         raise ValueError(f"Array {array_name} not found in {file_path}")
 
     array_content = match.group(1)
-    # allow numbers with or without 'f'
+    # Extract numbers, allowing optional 'f' at the end
     numbers = re.findall(r'-?\d+\.\d+(?:[eE][-+]?\d+)?f?', array_content)
     clean_numbers = [float(num.rstrip('f')) for num in numbers]
 
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     model = CNN()
     load_weights(model)
     input_tensor, target_tensor = load_data()
-    print_layers = ['relu3']  # Specify layers to dump into file
+    print_layers = ['fc2']  # Specify layers to dump into file
     num_inputs = 1  # Only first N inputs go to file
     inference(model, input_tensor, target_tensor, num_inputs, print_layers)
     print("Layer outputs written to output_python.txt")
