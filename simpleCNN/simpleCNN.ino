@@ -8,11 +8,11 @@
 
 // Model constants
 #define INPUT_CHANNELS 1  // Grayscale input
-#define INPUT_HEIGHT 4    // Image height
-#define INPUT_WIDTH 5     // Image width
-#define CONV1_FILTERS 1   // Conv1 output channels
+#define INPUT_HEIGHT 6    // Image height
+#define INPUT_WIDTH 8     // Image width
+#define CONV1_FILTERS 2   // Conv1 output channels
 #define KERNEL_SIZE \
-  { 2, 3 }  // Convolution kernel size
+  { 3, 4 }  // Convolution kernel size
 #define STRIDE \
   { 1, 1 }  // Convolution stride
 #define PADDING \
@@ -28,9 +28,9 @@ ailayer_t *layers[LAYER_COUNT]; // Array of layer pointers
 void *parameter_memory;         // PSRAM for weights/biases
 
 // Layer structures
-uint16_t input_shape[] = { 1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };                           // Input: [1,1,4,5]
+uint16_t input_shape[] = { 1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };                           // Input: [1,1,6,8]
 ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);                               // 4D input tensor
-ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weight, conv1_bias); // Conv1: 1->1, 2x3
+ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weight, conv1_bias); // Conv1: 1->2, 3x4
 
 // Initialize CNN layers
 void init_layers() {
@@ -41,7 +41,7 @@ void init_layers() {
     while (1);
   }
 
-  // Conv1: 1->1 channel, 2x3 kernel, output [1,1,3,3]
+  // Conv1: 1->2 channels, 3x4 kernel, output [1,2,4,5]
   conv1_layer.channel_axis = 1;  // NCHW format
   layers[1] = model.output_layer = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
   if (!model.output_layer) {
@@ -81,9 +81,9 @@ void test() {
                 inference_memory_size, ESP.getFreePsram());
 
   const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-  const uint16_t output_shape[] = {1, CONV1_FILTERS, INPUT_HEIGHT-1, INPUT_WIDTH-2};
+  const uint16_t output_shape[] = {1, CONV1_FILTERS, INPUT_HEIGHT-2, INPUT_WIDTH-3};
   float input_buffer[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
-  float output_data[CONV1_FILTERS * (INPUT_HEIGHT-1) * (INPUT_WIDTH-2)];
+  float output_data[CONV1_FILTERS * (INPUT_HEIGHT-2) * (INPUT_WIDTH-3)];
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_buffer);
   aitensor_t output_tensor = AITENSOR_4D_F32(output_shape, output_data);
 
@@ -118,7 +118,7 @@ void test() {
 
     // Copy output data
     float *output_data_ptr = (float *)output_tensor_ptr->data;
-    for (uint32_t j = 0; j < CONV1_FILTERS * (INPUT_HEIGHT-1) * (INPUT_WIDTH-2); j++) {
+    for (uint32_t j = 0; j < CONV1_FILTERS * (INPUT_HEIGHT-2) * (INPUT_WIDTH-3); j++) {
       output_data[j] = output_data_ptr[j];
     }
 
@@ -130,13 +130,15 @@ void test() {
       if (j < INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH - 1) Serial.print(", ");
     }
     Serial.println("]");
-    Serial.printf("Conv1 output shape: [1, %u, %u, %u]\n", CONV1_FILTERS, INPUT_HEIGHT-1, INPUT_WIDTH-2);
-    Serial.printf("Conv1 output: [", i);
-    for (uint32_t j = 0; j < CONV1_FILTERS * (INPUT_HEIGHT-1) * (INPUT_WIDTH-2); j++) {
-      Serial.printf("%.1f", output_data[j]);
-      if (j < CONV1_FILTERS * (INPUT_HEIGHT-1) * (INPUT_WIDTH-2) - 1) Serial.print(", ");
+    Serial.printf("Conv1 output shape: [1, %u, %u, %u]\n", CONV1_FILTERS, INPUT_HEIGHT-2, INPUT_WIDTH-3);
+    for (uint32_t c = 0; c < CONV1_FILTERS; c++) {
+      Serial.printf("Conv1 output channel %u: [", c);
+      for (uint32_t j = 0; j < (INPUT_HEIGHT-2) * (INPUT_WIDTH-3); j++) {
+        Serial.printf("%.1f", output_data[c * (INPUT_HEIGHT-2) * (INPUT_WIDTH-3) + j]);
+        if (j < (INPUT_HEIGHT-2) * (INPUT_WIDTH-3) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
     }
-    Serial.println("]");
   }
 
   free(inference_memory);

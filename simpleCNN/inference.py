@@ -7,7 +7,7 @@ import re
 class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 1, kernel_size=(2, 3), padding=0)
+        self.conv1 = nn.Conv2d(1, 2, kernel_size=(3, 4), padding=0)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -17,26 +17,24 @@ class SimpleCNN(nn.Module):
 def parse_c_array(file_path, array_name):
     with open(file_path, 'r') as f:
         content = f.read()
-    # Find the specific array definition
     pattern = rf'{array_name}\s*\[.*?\]\s*=\s*\{{(.*?)\}};'
     match = re.search(pattern, content, re.DOTALL)
     if not match:
         raise ValueError(f"Array {array_name} not found in {file_path}")
 
-    # Extract numbers from the matched array content only
     array_content = match.group(1)
     numbers = re.findall(r'-?\d+\.\d+', array_content)
     return [float(num) for num in numbers]
 
 # Read weights and biases from weights.h
 weights = parse_c_array('weights.h', 'conv1_weight')
-weights = np.array(weights).reshape(1, 1, 2, 3)
+weights = np.array(weights).reshape(2, 1, 3, 4)  # 2 filters, 1 input channel, 3x4 kernel
 bias = parse_c_array('weights.h', 'conv1_bias')
-bias = np.array(bias).reshape(1)
+bias = np.array(bias).reshape(2)
 
 # Read input data from data.h
 input_data = parse_c_array('data.h', 'input_data')
-input_data = np.array(input_data).reshape(4, 1, 4, 5)
+input_data = np.array(input_data).reshape(4, 1, 6, 8)  # 4 inputs, 1 channel, 6x8
 
 # Initialize model
 model = SimpleCNN()
@@ -57,4 +55,5 @@ for i in range(input_data.shape[0]):
     print(f"\nInput {i} shape: {input_tensor.shape}")
     print(f"Input {i}: {input_tensor.flatten().numpy().tolist()}")
     print(f"Conv1 output shape: {output.shape}")
-    print(f"Conv1 output: {output[0, 0].flatten().numpy().tolist()}")
+    for j in range(output.size(1)):
+        print(f"Conv1 output channel {j} for input {i}: {output[0, j].flatten().numpy().tolist()}")
