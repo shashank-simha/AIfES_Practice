@@ -11,12 +11,16 @@
 #define INPUT_HEIGHT 28
 #define INPUT_WIDTH 28
 #define CONV1_FILTERS 8
+#define CONV2_FILTERS 16
 #define KERNEL_SIZE {3, 3}
 #define STRIDE {1, 1}
 #define PADDING {1, 1}
 #define DILATION {1, 1}
-#define LAYER_COUNT 2  // Input, conv1
-#define TEST_DATASET 1  // One image
+#define POOL_SIZE {2, 2}
+#define POOL_STRIDE {2, 2}
+#define POOL_PADDING {0, 0}
+#define LAYER_COUNT 7  // Input, conv1, relu1, pool1, conv2, relu2, pool2
+#define TEST_DATASET 1 // One image
 
 // Global model variables
 aimodel_t model;
@@ -27,21 +31,49 @@ void *parameter_memory;
 uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
 ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);
 ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weights, conv1_bias);
+ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_M();
+ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
+ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_M(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv2_weights, conv2_bias);
+ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_M();
+ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
 
 // Initialize layers
 void init_layers() {
+  // Input
   layers[0] = model.input_layer = ailayer_input_f32_default(&input_layer);
   if (!model.input_layer) {
     Serial.println(F("Input layer init failed"));
     while (1);
   }
-  conv1_layer.channel_axis = 1;  // NCHW
-  layers[1] = model.output_layer = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
+
+  // Conv1
+  conv1_layer.channel_axis = 1; // NCHW
+  layers[1] = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
+
+  // ReLU1
+  layers[2] = ailayer_relu_f32_default(&relu1_layer, layers[1]);
+
+  // Pool1
+  pool1_layer.channel_axis = 1; // NCHW
+  layers[3] = ailayer_maxpool2d_f32_default(&pool1_layer, layers[2]);
+
+  // Conv2
+  conv2_layer.channel_axis = 1; // NCHW
+  layers[4] = ailayer_conv2d_f32_default(&conv2_layer, layers[3]);
+
+  // ReLU2
+  layers[5] = ailayer_relu_f32_default(&relu2_layer, layers[4]);
+
+  // Pool2
+  pool2_layer.channel_axis = 1; // NCHW
+  layers[6] = model.output_layer = ailayer_maxpool2d_f32_default(&pool2_layer, layers[5]);
+
   if (!model.output_layer) {
-    Serial.println(F("Conv1 layer init failed"));
+    Serial.println(F("Layer init failed"));
     while (1);
   }
 }
+
 
 // Initialize model
 void init_model() {
@@ -57,7 +89,7 @@ void init_model() {
 
 // Test on one image
 void test() {
-  Serial.println(F("Testing conv1..."));
+  Serial.println(F("Testing until pool2..."));
   uint32_t inference_memory_size = aialgo_sizeof_inference_memory(&model);
   void *inference_memory = ps_malloc(inference_memory_size);
   if (!inference_memory) {
@@ -68,16 +100,15 @@ void test() {
   Serial.printf("Inference memory allocated: %u bytes\n", inference_memory_size);
 
   const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-  const uint16_t output_shape[] = {1, CONV1_FILTERS, INPUT_HEIGHT, INPUT_WIDTH};
   float input_buffer[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
-  float output_data[CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH];
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_buffer);
-  aitensor_t output_tensor = AITENSOR_4D_F32(output_shape, output_data);
 
+  // Copy test input
   for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
     for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
       for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
-        input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] = pgm_read_float(&test_input_data[0][c][h][w]);
+        input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            pgm_read_float(&test_input_data[0][c][h][w]);
       }
     }
   }
@@ -88,11 +119,20 @@ void test() {
     return;
   }
 
+  // Flatten + print with shape
   float *output_data_ptr = (float *)output_tensor_ptr->data;
-  Serial.print("Conv1 output: [");
-  for (uint32_t j = 0; j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH; j++) {
-    Serial.printf("%.6f", output_data_ptr[j]);
-    if (j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH - 1) Serial.print(", ");
+  uint32_t output_size = 1;
+  Serial.print("pool2 output (shape: ");
+  for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) {
+    output_size *= output_tensor_ptr->shape[d];
+    Serial.print(output_tensor_ptr->shape[d]);
+    if (d < output_tensor_ptr->dim - 1) Serial.print("x");
+  }
+  Serial.print("): [");
+
+  for (uint32_t i = 0; i < output_size; i++) {
+    Serial.printf("%.6f", output_data_ptr[i]);
+    if (i < output_size - 1) Serial.print(",");
   }
   Serial.println("]");
 

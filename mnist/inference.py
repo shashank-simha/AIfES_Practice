@@ -123,8 +123,10 @@ def inference(model, input_tensor, target_tensor, num_inputs=1, print_layers=[])
                 if i < num_inputs:
                     for layer_name in print_layers:
                         if layer_name in outputs:
-                            flat_vals = ",".join([f"{val:.6f}" for val in outputs[layer_name].flatten().numpy()])
-                            f.write(f"{layer_name} for input {i}: [{flat_vals}]\n")
+                            tensor = outputs[layer_name]
+                            shape_str = "x".join(map(str, tensor.shape))  # e.g., "1x8x14x14"
+                            flat_vals = ",".join([f"{val:.6f}" for val in tensor.flatten().numpy()])
+                            f.write(f"{layer_name} for input {i} (shape: {shape_str}): [{flat_vals}]\n")
                     f.write(f"Prediction for input {i}: {pred_class}, Target: {target_class}, Matches: {matches}\n\n")
 
     acc = 100.0 * correct / total
@@ -135,7 +137,7 @@ if __name__ == "__main__":
     model = CNN()
     load_weights(model)
     input_tensor, target_tensor = load_data()
-    print_layers = ['conv1', 'conv2']  # Specify layers to dump into file
+    print_layers = ['pool2']  # Specify layers to dump into file
     num_inputs = 1  # Only first N inputs go to file
     inference(model, input_tensor, target_tensor, num_inputs, print_layers)
     print("Layer outputs written to output_python.txt")
