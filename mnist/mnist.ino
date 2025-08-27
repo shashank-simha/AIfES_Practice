@@ -22,7 +22,7 @@
 #define DENSE1_SIZE 64
 #define OUTPUT_SIZE 10        // For softmax
 #define LAYER_COUNT 11        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 → softmax
-#define TEST_DATASET 10        // One image
+#define TEST_DATASET 20        // One image
 
 // Global model variables
 aimodel_t model;
@@ -115,9 +115,9 @@ void init_model() {
   Serial.println(F("Model initialized"));
 }
 
-// Test on one image
+// Test on multiple images
 void test() {
-  Serial.println(F("Testing full model up to Softmax..."));
+  Serial.printf(F("Testing %d images up to Softmax...\n"), TEST_DATASET);
 
   uint32_t inference_memory_size = aialgo_sizeof_inference_memory(&model);
   void *inference_memory = ps_malloc(inference_memory_size);
@@ -128,58 +128,62 @@ void test() {
   aialgo_schedule_inference_memory(&model, inference_memory, inference_memory_size);
   Serial.printf("Inference memory allocated: %u bytes\n", inference_memory_size);
 
-  // Input tensor
-  const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+  // Allocate input buffer once
   float *input_buffer = (float *)ps_malloc(INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
   if (!input_buffer) {
     Serial.println(F("Input buffer allocation failed"));
     free(inference_memory);
     while (1);
   }
+
+  const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_buffer);
 
-  // Load test input image from PROGMEM
-  for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
-    for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
-      for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
-        input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_float(&test_input_data[0][c][h][w]);
+  // Loop over all test images
+  for (uint32_t img_idx = 0; img_idx < TEST_DATASET; img_idx++) {
+
+    // Load test input image from PROGMEM
+    for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+      for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+        for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+          input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+              pgm_read_float(&test_input_data[img_idx][c][h][w]);
+        }
       }
     }
-  }
 
-  // Run model forward
-  aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
-  if (!output_tensor_ptr) {
-    Serial.println(F("Forward pass failed"));
-    free(input_buffer);
-    free(inference_memory);
-    return;
-  }
+    // Run model forward
+    aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
+    if (!output_tensor_ptr) {
+      Serial.printf(F("Forward pass failed for image %d\n"), img_idx);
+      continue;
+    }
 
-  // Print runtime shape
-  float *output_data_ptr = (float *)output_tensor_ptr->data;
-  uint32_t out_size = 1;
-  Serial.print("Softmax output shape: [");
-  for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) {
-    Serial.printf("%u", output_tensor_ptr->shape[d]);
-    out_size *= output_tensor_ptr->shape[d];
-    if (d < output_tensor_ptr->dim - 1) Serial.print(", ");
-  }
-  Serial.println("]");
+    // Print runtime shape
+    float *output_data_ptr = (float *)output_tensor_ptr->data;
+    uint32_t out_size = 1;
+    Serial.printf("Image %d Softmax output shape: [", img_idx);
+    for (uint8_t d = 0; d < output_tensor_ptr->dim; d++) {
+      Serial.printf("%u", output_tensor_ptr->shape[d]);
+      out_size *= output_tensor_ptr->shape[d];
+      if (d < output_tensor_ptr->dim - 1) Serial.print(", ");
+    }
+    Serial.println("]");
 
-  // Print values
-  Serial.print("Softmax output: [");
-  for (uint32_t i = 0; i < out_size; i++) {
-    Serial.printf("%.6f", output_data_ptr[i]);
-    if (i < out_size - 1) Serial.print(", ");
+    // Print values
+    Serial.print("Softmax output: [");
+    for (uint32_t i = 0; i < out_size; i++) {
+      Serial.printf("%.6f", output_data_ptr[i]);
+      if (i < out_size - 1) Serial.print(", ");
+    }
+    Serial.println("]\n");
   }
-  Serial.println("]");
 
   free(input_buffer);
   free(inference_memory);
   Serial.println(F("Memory freed after inference"));
 }
+
 
 // Setup
 void setup() {
