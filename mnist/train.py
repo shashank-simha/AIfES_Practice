@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets
-from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms import ToTensor
 import numpy as np
 
 # ------------------ Configuration ------------------
-NORMALIZED = True  # Float normalized (mu=0.1307, sigma=0.3081) if True, else raw uint8
-NUM_TEST_SUBSET = 20  # Test samples (subset for header)
-NUM_CLASSES = 10      # Number of classes (0-9)
+NUM_TEST_SUBSET = 20
+NUM_CLASSES = 10
 BATCH_SIZE = 100
 EPOCHS = 20
 
 # ------------------ Load MNIST ------------------
-transform = Compose([ToTensor()])  # Always load as float [0,1] in Python
+transform = ToTensor()  # always float [0,1] for training
 full_train = datasets.MNIST(root="data", train=True, transform=transform, download=True)
 full_test = datasets.MNIST(root="data", train=False, transform=transform, download=True)
 
@@ -28,31 +26,29 @@ for i in range(NUM_CLASSES):
     test_idx.extend(np.random.choice(class_indices, size=NUM_TEST_SUBSET // NUM_CLASSES, replace=False))
 test_idx = np.array(test_idx)
 
-test_images_subset = full_test.data[test_idx].numpy()  # [NUM_TEST_SUBSET, 28, 28]
+test_images_subset = full_test.data[test_idx].numpy()   # uint8 [N,28,28]
 test_labels_subset = full_test.targets[test_idx].numpy()
 
 print("Test subset class counts:", np.bincount(test_labels_subset, minlength=NUM_CLASSES))
 
-# ------------------ Custom dataset class ------------------
+# ------------------ Custom Dataset ------------------
 class CustomMNIST(torch.utils.data.Dataset):
-    def __init__(self, data, targets, normalized=True):
+    def __init__(self, data, targets):
         self.data = data
         self.targets = targets
-        self.normalized = normalized
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        img = self.data[idx].astype(np.float32)
-        if self.normalized:
-            img = (img / 255.0 - 0.1307) / 0.3081
-        img = torch.tensor(img, dtype=torch.float32).unsqueeze(0)  # [1,28,28]
+        img = self.data[idx].astype(np.float32) / 255.0
+        img = (img - 0.1307) / 0.3081  # fixed normalization
+        img = torch.tensor(img).unsqueeze(0)  # [1,28,28]
         label = torch.tensor(self.targets[idx], dtype=torch.long)
         return img, label
 
-train_dataset = CustomMNIST(full_train.data.numpy(), full_train.targets.numpy(), normalized=NORMALIZED)
-test_dataset = CustomMNIST(full_test.data.numpy(), full_test.targets.numpy(), normalized=NORMALIZED)
+train_dataset = CustomMNIST(full_train.data.numpy(), full_train.targets.numpy())
+test_dataset = CustomMNIST(full_test.data.numpy(), full_test.targets.numpy())
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=1)
@@ -60,11 +56,11 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, s
 # ------------------ CNN model ------------------
 class CNN(nn.Module):
     def __init__(self):
-        super(CNN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool1 = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool2 = nn.MaxPool2d(2, 2)
         self.fc1 = nn.Linear(16*7*7, 64)
         self.fc2 = nn.Linear(64, NUM_CLASSES)
 
@@ -73,10 +69,9 @@ class CNN(nn.Module):
         x = F.relu(self.pool2(self.conv2(x)))
         x = x.view(-1, 16*7*7)
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x  # logits
+        return self.fc2(x)
 
-# ------------------ Training setup ------------------
+# ------------------ Training ------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = CNN().to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -147,7 +142,7 @@ def generate_weights():
         conv2_b = model.conv2.bias.data.cpu().numpy()
         f.write(f"const float conv2_bias[16] PROGMEM = {{{','.join([f'{x:.6f}f' for x in conv2_b])}}};\n")
         # FC1 weights [784,64]
-        fc1_w = model.fc1.weight.data.cpu().numpy().T  # [784,64]
+        fc1_w = model.fc1.weight.data.cpu().numpy().T
         f.write("const float fc1_weights[784][64] PROGMEM = {\n")
         for i in range(784):
             row = ",".join([f"{x:.6f}f" for x in fc1_w[i]])
@@ -157,7 +152,7 @@ def generate_weights():
         fc1_b = model.fc1.bias.data.cpu().numpy()
         f.write(f"const float fc1_bias[64] PROGMEM = {{{','.join([f'{x:.6f}f' for x in fc1_b])}}};\n")
         # FC2 weights [64,10]
-        fc2_w = model.fc2.weight.data.cpu().numpy().T  # [64,10]
+        fc2_w = model.fc2.weight.data.cpu().numpy().T
         f.write("const float fc2_weights[64][10] PROGMEM = {\n")
         for i in range(64):
             row = ",".join([f"{x:.6f}f" for x in fc2_w[i]])
@@ -173,31 +168,26 @@ def generate_weights():
 def generate_dataset():
     with open("mnist_data.h", "w") as f:
         f.write("#ifndef MNIST_DATA_H\n#define MNIST_DATA_H\n\n")
-        # Input
-        input_type = "float" if NORMALIZED else "uint8_t"
-        if NORMALIZED:
-            inputs = (test_images_subset.astype(np.float32)/255.0 - 0.1307)/0.3081
-        else:
-            inputs = test_images_subset.astype(np.uint8)
-        f.write(f"const {input_type} test_input_data[{NUM_TEST_SUBSET}][1][28][28] PROGMEM = {{\n")
+        # Inputs as raw uint8_t
+        f.write(f"const uint8_t test_input_data[{NUM_TEST_SUBSET}][1][28][28] PROGMEM = {{\n")
         for i in range(NUM_TEST_SUBSET):
             f.write("  {\n")
             for j in range(1):
                 f.write("    {\n")
                 for k in range(28):
-                    row = ",".join([f"{x:.6f}f" if NORMALIZED else str(x) for x in inputs[i,k]])
+                    row = ",".join([str(x) for x in test_images_subset[i,k]])
                     f.write(f"      {{{row}}}" + (",\n" if k<27 else "\n"))
                 f.write("    }\n")
             f.write("  }" + (",\n" if i<NUM_TEST_SUBSET-1 else "\n"))
         f.write("};\n\n")
-        # Labels as integers
+        # Labels as uint8_t
         labels = test_labels_subset.astype(np.uint8)
         f.write(f"const uint8_t test_target_data[{NUM_TEST_SUBSET}] PROGMEM = {{\n")
         for i in range(NUM_TEST_SUBSET):
             f.write(f"  {labels[i]}" + (",\n" if i<NUM_TEST_SUBSET-1 else "\n"))
         f.write("};\n")
         f.write("#endif\n")
-    print(f"Dataset saved to mnist_data.h ({'normalized float' if NORMALIZED else 'uint8_t raw'})")
+    print("Dataset saved to mnist_data.h (uint8_t raw)")
 
 # ------------------ Generate headers ------------------
 generate_weights()
