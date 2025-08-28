@@ -29,6 +29,23 @@ aimodel_t model;
 ailayer_t *layers[LAYER_COUNT];
 void *parameter_memory;
 
+// =======================
+// Dataset abstraction
+// =======================
+
+typedef struct {
+  uint32_t size;       // number of samples in dataset
+  uint32_t index;      // current position
+} Dataset;
+
+// Initialize dataset
+Dataset dataset_init(uint32_t dataset_size) {
+  Dataset ds;
+  ds.size = dataset_size;
+  ds.index = 0;
+  return ds;
+}
+
 // Layer structures
 uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
 ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);
@@ -52,6 +69,53 @@ ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_M();
 // Softmax final layer
 ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, fc2_weights, fc2_bias);
 ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_M();
+
+// =======================
+// Data preparation helpers
+// =======================
+
+// Prepare a single input image from PROGMEM into float buffer
+// - Normalizes pixel values to [0, 1]
+// - Converts from uint8_t to float
+void prepare_input(uint32_t img_idx, float *input_buffer) {
+  for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+    for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+      for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+        uint8_t pixel_val = pgm_read_byte(&test_input_data[img_idx][c][h][w]);
+        input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+            (float)pixel_val / 255.0f;  // normalize
+      }
+    }
+  }
+}
+
+// Retrieve the target class (0–9) from PROGMEM
+uint8_t get_target_class(uint32_t img_idx) {
+  return pgm_read_byte(&test_target_data[img_idx]);
+}
+
+// Get next batch of data
+// - Fills input buffer [batch_size, channels*height*width]
+// - Fills target buffer [batch_size]
+void dataset_next_batch(Dataset *ds, uint32_t batch_size,
+                        float *input_batch, uint8_t *target_batch) {
+  for (uint32_t b = 0; b < batch_size; b++) {
+    uint32_t img_idx = ds->index;
+
+    // Fill input
+    prepare_input(img_idx, &input_batch[b * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH]);
+
+    // Fill target
+    target_batch[b] = get_target_class(img_idx);
+
+    // Advance index (wrap around dataset)
+    ds->index = (ds->index + 1) % ds->size;
+  }
+}
+
+// =======================
+// Model initialization
+// =======================
 
 // Initialize layers
 void init_layers() {
@@ -94,7 +158,7 @@ void init_layers() {
   layers[9] = ailayer_relu_f32_default(&relu3_layer, layers[8]);
 
   // Dense2 + Softmax
-  layers[10] = model.output_layer = ailayer_softmax_f32_default(&softmax_layer, 
+  layers[10] = model.output_layer = ailayer_softmax_f32_default(&softmax_layer,
                           ailayer_dense_f32_default(&dense2_layer, layers[9]));
 
   if (!model.output_layer) {
@@ -115,7 +179,10 @@ void init_model() {
   Serial.println(F("Model initialized"));
 }
 
-// Test on multiple images with accuracy
+// =======================
+// Inference / Test
+// =======================
+
 void test() {
   Serial.printf(F("Testing %d images...\n"), TEST_DATASET);
 
@@ -128,10 +195,11 @@ void test() {
   aialgo_schedule_inference_memory(&model, inference_memory, inference_memory_size);
   Serial.printf("Inference memory allocated: %u bytes\n", inference_memory_size);
 
-  // Allocate input buffer once
+  // Allocate input + label buffers once
   float *input_buffer = (float *)ps_malloc(INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
-  if (!input_buffer) {
-    Serial.println(F("Input buffer allocation failed"));
+  uint8_t *target_buffer = (uint8_t *)ps_malloc(sizeof(uint8_t));
+  if (!input_buffer || !target_buffer) {
+    Serial.println(F("Buffer allocation failed"));
     free(inference_memory);
     while (1);
   }
@@ -139,19 +207,12 @@ void test() {
   const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_buffer);
 
+  Dataset test_ds = dataset_init(TEST_DATASET);
   uint32_t correct_count = 0;
 
   for (uint32_t img_idx = 0; img_idx < TEST_DATASET; img_idx++) {
-
-    // Load test input image from PROGMEM
-    for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
-      for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
-        for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
-          input_buffer[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-              pgm_read_float(&test_input_data[img_idx][c][h][w]);
-        }
-      }
-    }
+    // Get next sample (batch_size = 1)
+    dataset_next_batch(&test_ds, 1, input_buffer, target_buffer);
 
     // Run model forward
     aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
@@ -174,15 +235,8 @@ void test() {
       }
     }
 
-    // Get actual target class from PROGMEM one-hot vector
-    uint32_t target_class = 0;
-    for (uint32_t i = 0; i < 10; i++) {
-        float val = pgm_read_float(&test_target_data[img_idx][i]);
-        if (val == 1.0f) {
-            target_class = i;
-            break;
-        }
-    }
+    // Compare with actual label
+    uint32_t target_class = target_buffer[0];
     bool matches = (pred_class == target_class);
     if (matches) correct_count++;
 
@@ -194,13 +248,15 @@ void test() {
   Serial.printf("Accuracy: %u/%u (%.2f%%)\n", correct_count, TEST_DATASET, accuracy);
 
   free(input_buffer);
+  free(target_buffer);
   free(inference_memory);
   Serial.println(F("Memory freed after inference"));
 }
 
+// =======================
+// Setup & Loop
+// =======================
 
-
-// Setup
 void setup() {
   Serial.begin(115200);
   while (!Serial);
@@ -213,7 +269,6 @@ void setup() {
   Serial.println(F("Type >t< to test"));
 }
 
-// Loop
 void loop() {
   if (Serial.available() > 0) {
     String str = Serial.readString();
