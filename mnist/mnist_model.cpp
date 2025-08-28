@@ -108,7 +108,7 @@ uint32_t MNISTModel::infer(float* input_buffer) {
     return pred_class;
 }
 
-// Test dataset
+// // Test dataset
 void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
     Serial.printf("Testing %u images...\n", num_samples);
 
@@ -135,3 +135,179 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
     free(input_buffer);
     free(target_buffer);
 }
+
+
+// // Train dataset
+// void MNISTModel::train(Dataset& ds, uint32_t num_samples) {
+//     Serial.printf("Training on %u images...\n", num_samples);
+
+//     // Allocate input/target buffers for one batch
+//     float* input_buffer = (float*)ps_malloc(BATCH_SIZE * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
+//     uint8_t* target_buffer = (uint8_t*)ps_malloc(BATCH_SIZE * sizeof(uint8_t));
+//     if (!input_buffer || !target_buffer) {
+//         Serial.println(F("Buffer allocation failed"));
+//         return;
+//     }
+
+//     // Configure cross-entropy loss
+//     ailoss_crossentropy_f32_t crossentropy_loss;
+//     this->loss = ailoss_crossentropy_f32_default(&crossentropy_loss, this->output_layer);
+//     if (!this->loss) {
+//         Serial.println(F("Loss initialization failed"));
+//         return;
+//     }
+
+//     // Configure SGD optimizer
+//     aiopti_sgd_f32_t sgd_opti = { .learning_rate = LEARNING_RATE };
+//     aiopti_t* optimizer = aiopti_sgd_f32_default(&sgd_opti);
+//     if (!optimizer) {
+//         Serial.println(F("Optimizer initialization failed"));
+//         return;
+//     }
+
+//     // Initialize model parameters + training memory
+//     aialgo_initialize_parameters_model(&this->model);
+//     uint32_t training_memory_size = aialgo_sizeof_training_memory(&this->model, optimizer);
+//     void* training_memory = ps_malloc(training_memory_size);
+//     if (!training_memory) {
+//         Serial.println(F("Training memory allocation failed"));
+//         return;
+//     }
+//     aialgo_schedule_training_memory(&this->model, optimizer, training_memory, training_memory_size);
+//     aialgo_init_model_for_training(&this->model, optimizer);
+
+//     // Training loop
+//     aiprint("Start training\n");
+//     for (uint32_t epoch = 0; epoch < EPOCHS; epoch++) {
+//         uint32_t steps = num_samples / BATCH_SIZE;
+//         float epoch_loss = 0.0f;
+
+//         for (uint32_t step = 0; step < steps; step++) {
+//             // Get batch
+//             ds.next_batch(BATCH_SIZE, input_buffer, target_buffer);
+
+//             // Create tensors
+//             const uint16_t input_shape[] = { BATCH_SIZE, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
+//             const uint16_t target_shape[] = { BATCH_SIZE };
+//             aitensor_t input_tensor  = AITENSOR_4D_F32(input_shape, input_buffer);
+//             aitensor_t target_tensor = AITENSOR_1D_U8(target_shape, target_buffer);
+
+//             // Train step
+//             aialgo_train_model(&this->model, &input_tensor, &target_tensor, optimizer, BATCH_SIZE);
+
+//             // Track batch loss
+//             float batch_loss;
+//             aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &batch_loss);
+//             epoch_loss += batch_loss;
+//         }
+
+//         // Print per-epoch loss
+//         epoch_loss /= steps;
+//         Serial.printf("Epoch %u/%u - Loss: %.4f\n", epoch + 1, EPOCHS, epoch_loss);
+//     }
+
+//     aiprint("Finished training\n");
+
+//     // Cleanup
+//     free(input_buffer);
+//     free(target_buffer);
+//     free(training_memory);
+//     Serial.printf("Training memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
+// }
+
+
+// // Inside mnist_model.h or mnist_model.cpp
+
+// void MNISTModel::train() {
+//   Serial.println(F("Training..."));
+// #if DEBUG
+//   Serial.printf("Free SRAM before: %u bytes\n", ESP.getFreeHeap());
+// #endif
+
+//   // Configure cross-entropy loss
+//   ailoss_crossentropy_f32_t crossentropy_loss;
+//   this->loss = ailoss_crossentropy_f32_default(&crossentropy_loss, this->output_layer);
+//   if (!this->loss) {
+//     Serial.println(F("Loss initialization failed"));
+//     while (1);
+//   }
+// #if DEBUG
+//   aiprint("\nLoss specs:\n");
+//   aialgo_print_loss_specs(this->loss);
+//   aiprint("\n");
+// #endif
+
+//   // Configure SGD optimizer
+//   aiopti_sgd_f32_t sgd_opti = { .learning_rate = LEARNING_RATE };
+//   aiopti_t *optimizer = aiopti_sgd_f32_default(&sgd_opti);
+//   if (!optimizer) {
+//     Serial.println(F("Optimizer initialization failed"));
+//     while (1);
+//   }
+// #if DEBUG
+//   aiprint("Optimizer specs:\n");
+//   aialgo_print_optimizer_specs(optimizer);
+//   aiprint("\n");
+// #endif
+
+//   // Initialize model parameters
+//   aialgo_initialize_parameters_model(&this->model);
+//   Serial.println(F("Parameters initialized"));
+
+//   // Allocate training memory in PSRAM
+//   uint32_t training_memory_size = aialgo_sizeof_training_memory(&this->model, optimizer);
+//   void *training_memory = ps_malloc(training_memory_size);
+//   if (!training_memory) {
+//     Serial.println(F("Training memory allocation failed"));
+//     while (1);
+//   }
+//   aialgo_schedule_training_memory(&this->model, optimizer, training_memory, training_memory_size);
+//   aialgo_init_model_for_training(&this->model, optimizer);
+//   Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+//                 training_memory_size, ESP.getFreePsram());
+
+//   // Input/target tensors from PROGMEM
+//   const uint16_t input_shape[]  = { TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
+//   const uint16_t target_shape[] = { TRAIN_DATASET }; // labels are uint8 (class indices)
+//   aitensor_t input_tensor  = AITENSOR_4D_U8(input_shape, (uint8_t *)train_input_data);
+//   aitensor_t target_tensor = AITENSOR_1D_U8(target_shape, (uint8_t *)train_target_data);
+
+// #if DEBUG
+//   Serial.printf("Input tensor shape: [%u,%u,%u,%u]\n",
+//                 input_tensor.shape[0], input_tensor.shape[1],
+//                 input_tensor.shape[2], input_tensor.shape[3]);
+//   Serial.printf("Target tensor shape: [%u]\n", target_tensor.shape[0]);
+//   Serial.printf("Free SRAM after tensors: %u bytes\n", ESP.getFreeHeap());
+// #endif
+
+//   // Test forward pass
+//   Serial.println(F("Testing forward pass"));
+//   aitensor_t *output_tensor = aialgo_forward_model(&this->model, &input_tensor);
+//   if (!output_tensor) {
+//     Serial.println(F("Forward pass failed"));
+//     while (1);
+//   }
+//   Serial.println(F("Forward pass completed"));
+
+//   // Training loop
+//   float loss;
+//   aiprint("Start training\n");
+//   for (int i = 0; i < EPOCHS; i++) {
+//     aialgo_train_model(&this->model, &input_tensor, &target_tensor, optimizer, BATCH_SIZE);
+
+//     if (i % PRINT_INTERVAL == 0) {
+//       aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &loss);
+//       aiprint("Epoch ");
+//       aiprint_int("%5d", i);
+//       aiprint(": train loss: ");
+//       aiprint_float("%f", loss);
+//       aiprint("\n");
+//     }
+//   }
+//   aiprint("Finished training\n");
+
+//   // Free training memory
+//   free(training_memory);
+//   Serial.printf("Training memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
+// }
+

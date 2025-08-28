@@ -5,9 +5,7 @@
 #include "dataset.h"
 
 // Model constants
-#define INPUT_CHANNELS 1
-#define INPUT_HEIGHT 28
-#define INPUT_WIDTH 28
+
 #define CONV1_FILTERS 8
 #define CONV2_FILTERS 16
 #define KERNEL_SIZE {3, 3}

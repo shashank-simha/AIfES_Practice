@@ -1,29 +1,74 @@
 #include "dataset.h"
+#include <pgmspace.h>
 
-// test_input_data: uint8_t [N][1][28][28] stored in PROGMEM
-// test_target_data: uint8_t [N] stored in PROGMEM
+// ----------------------------
+// Constructor for inference (no labels)
+// ----------------------------
+Dataset::Dataset(const uint8_t input[][INPUT_CHANNELS][INPUT_HEIGHT][INPUT_WIDTH],
+                 uint32_t size)
+    : input_data(input), target_data(nullptr), dataset_size(size), cursor(0) {}
 
-Dataset::Dataset(uint32_t size) : dataset_size(size), cursor(0) {}
+// ----------------------------
+// Constructor for train/test (with labels)
+// ----------------------------
+Dataset::Dataset(const uint8_t input[][INPUT_CHANNELS][INPUT_HEIGHT][INPUT_WIDTH],
+                 const uint8_t* target,
+                 uint32_t size)
+    : input_data(input), target_data(target), dataset_size(size), cursor(0) {}
 
 void Dataset::reset() {
     cursor = 0;
 }
 
-void Dataset::next_batch(uint32_t batch_size, float* input_buffer, uint8_t* target_buffer) {
-    uint32_t input_size = 1 * 28 * 28;
+// ----------------------------
+// Inference mode (no labels)
+// ----------------------------
+void Dataset::next_batch(uint32_t batch_size, float* input_buffer) {
+    uint32_t input_size = INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH;
 
     for (uint32_t i = 0; i < batch_size; i++) {
         uint32_t idx = (cursor + i) % dataset_size;
 
         // Load image from PROGMEM -> buffer
-        for (uint32_t j = 0; j < input_size; j++) {
-            uint8_t val = pgm_read_byte(&(test_input_data[idx][0][0][j]));
-            input_buffer[i * input_size + j] = static_cast<float>(val) / 255.0f; // normalize to [0,1]
+        for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+            for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+                for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+                    uint8_t val = pgm_read_byte(&(input_data[idx][c][h][w]));
+                    input_buffer[i * input_size + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+                        static_cast<float>(val) / 255.0f;
+                }
+            }
+        }
+    }
+
+    cursor = (cursor + batch_size) % dataset_size;
+}
+
+// ----------------------------
+// Train/Test mode (with labels)
+// ----------------------------
+void Dataset::next_batch(uint32_t batch_size, float* input_buffer, uint8_t* target_buffer) {
+    uint32_t input_size = INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH;
+
+    for (uint32_t i = 0; i < batch_size; i++) {
+        uint32_t idx = (cursor + i) % dataset_size;
+
+        // Load image from PROGMEM -> buffer
+        for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
+            for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
+                for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
+                    uint8_t val = pgm_read_byte(&(input_data[idx][c][h][w]));
+                    input_buffer[i * input_size + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
+                        static_cast<float>(val) / 255.0f;
+                }
+            }
         }
 
-        // Load label
-        uint8_t label = pgm_read_byte(&(test_target_data[idx]));
-        target_buffer[i] = label;
+        // Load label if available
+        if (target_data) {
+            uint8_t label = pgm_read_byte(&(target_data[idx]));
+            target_buffer[i] = label;
+        }
     }
 
     cursor = (cursor + batch_size) % dataset_size;
