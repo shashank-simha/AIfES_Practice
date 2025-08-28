@@ -7,7 +7,7 @@
 #define DEBUG 1
 
 // Define input normalization (0: uint8_t [0, 255], 1: float normalized)
-#define NORMALIZED 0
+#define NORMALIZED 1
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(270 * 1024);  // 256KB
@@ -36,7 +36,7 @@ SET_LOOP_TASK_STACK_SIZE(270 * 1024);  // 256KB
 #define DENSE1_SIZE 64        // Dense layer neurons
 #define LAYER_COUNT 12        // Layers: input, conv1, relu1, pool1, conv2, relu2, pool2, flatten, dense1, relu3, dense2, softmax
 #define TRAIN_DATASET 200     // Number of training samples
-#define TEST_DATASET 20       // Number of test samples
+#define TEST_DATASET 20       // Number of test samples (match Python's NUM_TEST_SUBSET)
 #define BATCH_SIZE 4          // Batch size for training
 #define EPOCHS 1              // Number of training epochs
 #define PRINT_INTERVAL 1      // Print loss every epoch
@@ -274,24 +274,25 @@ void train() {
 #if DEBUG
 // Verify first pixel directly from PROGMEM
 #if NORMALIZED
-  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0]));  // Normalized (~-0.4242)
+  Serial.printf("First train pixel: %.4f\n", pgm_read_float(&train_input_data[0][0][0][0]));  // Normalized (~-0.4242)
 #else
-  Serial.printf("First train pixel: %u\n", pgm_read_byte(&train_input_data[0]));  // 0-255
+  Serial.printf("First train pixel: %u\n", pgm_read_byte(&train_input_data[0][0][0][0]));    // 0-255
 #endif
 #endif
 
-  // Convert input data to float [0, 1] if uint8_t
+  // Convert input data to float
   float input_data[TRAIN_DATASET * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
   for (uint32_t i = 0; i < TRAIN_DATASET; i++) {
     for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
       for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
         for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
 #if NORMALIZED
+          float val = pgm_read_float(&train_input_data[i][c][h][w]);
           input_data[i * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_float(&train_input_data[i][c][h][w]);
+            max(-10.0f, min(10.0f, val));  // Clamp to prevent overflow
 #else
           input_data[i * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH + c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_byte(&train_input_data[i][c][h][w]) / 255.0f;
+            (float)pgm_read_byte(&train_input_data[i][c][h][w]);  // float [0, 255]
 #endif
         }
       }
@@ -353,41 +354,34 @@ void train() {
 
 // Test the model
 void test() {
-  // Start testing
   Serial.println(F("Testing..."));
-
-  // Allocate inference memory in PSRAM
   uint32_t inference_memory_size = aialgo_sizeof_inference_memory(&model);
   void *inference_memory = ps_malloc(inference_memory_size);
   if (!inference_memory) {
     Serial.println(F("Inference memory allocation failed"));
-    while (1)
-      ;
+    while (1);
   }
   aialgo_schedule_inference_memory(&model, inference_memory, inference_memory_size);
   Serial.printf("Inference memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 inference_memory_size, ESP.getFreePsram());
 
 #if DEBUG
-// Verify first pixel directly from PROGMEM
 #if NORMALIZED
-  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0]));  // Normalized (~-0.4242)
+  Serial.printf("First test pixel: %.4f\n", pgm_read_float(&test_input_data[0][0][0][0]));
 #else
-  Serial.printf("First test pixel: %u\n", pgm_read_byte(&test_input_data[0]));    // 0-255
+  Serial.printf("First test pixel: %u\n", pgm_read_byte(&test_input_data[0][0][0][0]));
 #endif
 #endif
 
-  // Per-sample inference
-  const uint16_t single_input_shape[] = { 1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-  const uint16_t output_shape[] = { 1, OUTPUT_SIZE };
+  const uint16_t single_input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+  const uint16_t output_shape[] = {1, OUTPUT_SIZE};
   float input_data[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH];
   float output_data[OUTPUT_SIZE];
   aitensor_t input_tensor = AITENSOR_4D_F32(single_input_shape, input_data);
   aitensor_t output_tensor = AITENSOR_2D_F32(output_shape, output_data);
 
-// Test zero input
 #if DEBUG
-  float zero_input[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH] = { 0 };
+  float zero_input[INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH] = {0};
   aitensor_t zero_tensor = AITENSOR_4D_F32(single_input_shape, zero_input);
   aitensor_t *zero_output = aialgo_forward_model(&model, &zero_tensor);
   if (zero_output) {
@@ -404,56 +398,120 @@ void test() {
 
   uint32_t correct = 0;
   for (uint32_t i = 0; i < TEST_DATASET; i++) {
-    // Convert input to float
     for (uint32_t c = 0; c < INPUT_CHANNELS; c++) {
       for (uint32_t h = 0; h < INPUT_HEIGHT; h++) {
         for (uint32_t w = 0; w < INPUT_WIDTH; w++) {
 #if NORMALIZED
+          float val = pgm_read_float(&test_input_data[i][c][h][w]);
           input_data[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_float(&test_input_data[i][c][h][w]);
+            max(-10.0f, min(10.0f, val));
 #else
           input_data[c * INPUT_HEIGHT * INPUT_WIDTH + h * INPUT_WIDTH + w] =
-            pgm_read_byte(&test_input_data[i][c][h][w]) / 1.0f;
+            (float)pgm_read_byte(&test_input_data[i][c][h][w]);
 #endif
         }
       }
     }
 
 #if DEBUG
-    if (i < 3) {  // Print middle row pixels for first 3 images
-      Serial.printf("Image %u middle row pixels: ", i);
-      for (int p = 28 * 14; p < 28 * 15; p++) {
-        Serial.printf("%.4f ", input_data[p]);
+    if (i < 3) {
+      Serial.printf("Image %u input layer output: [", i);
+      for (uint32_t p = 0; p < INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH; p++) {
+        Serial.printf("%.4f", input_data[p]);
+        if (p < INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH - 1) Serial.print(", ");
       }
-      Serial.println();
+      Serial.println("]");
+      Serial.printf("Image %u conv1 output: [", i);
+      float *conv1_data = (float *)conv1_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH; j++) {
+        Serial.printf("%.3f", conv1_data[j]);
+        if (j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u relu1 output: [", i);
+      float *relu1_data = (float *)relu1_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH; j++) {
+        Serial.printf("%.3f", relu1_data[j]);
+        if (j < CONV1_FILTERS * INPUT_HEIGHT * INPUT_WIDTH - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u pool1 output: [", i);
+      float *pool1_data = (float *)pool1_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV1_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2); j++) {
+        Serial.printf("%.3f", pool1_data[j]);
+        if (j < CONV1_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u conv2 output: [", i);
+      float *conv2_data = (float *)conv2_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV2_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2); j++) {
+        Serial.printf("%.3f", conv2_data[j]);
+        if (j < CONV2_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u relu2 output: [", i);
+      float *relu2_data = (float *)relu2_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV2_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2); j++) {
+        Serial.printf("%.3f", relu2_data[j]);
+        if (j < CONV2_FILTERS * (INPUT_HEIGHT / 2) * (INPUT_WIDTH / 2) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u pool2 output: [", i);
+      float *pool2_data = (float *)pool2_layer.base.result.data;
+      for (uint32_t j = 0; j < CONV2_FILTERS * (INPUT_HEIGHT / 4) * (INPUT_WIDTH / 4); j++) {
+        Serial.printf("%.3f", pool2_data[j]);
+        if (j < CONV2_FILTERS * (INPUT_HEIGHT / 4) * (INPUT_WIDTH / 4) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u flatten output: [", i);
+      float *flatten_data = (float *)flatten_layer.base.base.result.data;
+      for (uint32_t j = 0; j < CONV2_FILTERS * (INPUT_HEIGHT / 4) * (INPUT_WIDTH / 4); j++) {
+        Serial.printf("%.3f", flatten_data[j]);
+        if (j < CONV2_FILTERS * (INPUT_HEIGHT / 4) * (INPUT_WIDTH / 4) - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u dense1 output: [", i);
+      float *dense1_data = (float *)dense1_layer.base.result.data;
+      for (uint32_t j = 0; j < DENSE1_SIZE; j++) {
+        Serial.printf("%.3f", dense1_data[j]);
+        if (j < DENSE1_SIZE - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u relu3 output: [", i);
+      float *relu3_data = (float *)relu3_layer.base.result.data;
+      for (uint32_t j = 0; j < DENSE1_SIZE; j++) {
+        Serial.printf("%.3f", relu3_data[j]);
+        if (j < DENSE1_SIZE - 1) Serial.print(", ");
+      }
+      Serial.println("]");
     }
 #endif
 
-    // Forward pass
     aitensor_t *output_tensor_ptr = aialgo_forward_model(&model, &input_tensor);
     if (!output_tensor_ptr) {
       Serial.printf("Forward pass failed for image %u\n", i);
       continue;
     }
 
-    // Find predicted and true labels
     uint32_t predicted = 0, true_label = 0;
-    float *output_data = (float *)output_tensor_ptr->data;  // Post-softmax
-    aitensor_t dense2_output = dense2_layer.base.result;    // Pre-softmax
+    float *output_data = (float *)output_tensor_ptr->data;
+    aitensor_t dense2_output = dense2_layer.base.result;
     float *logits = (float *)dense2_output.data;
 #if DEBUG
-    Serial.printf("Image %u logits: [", i);
-    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
-      Serial.printf("%.3f", logits[j]);
-      if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+    if (i < 3) {
+      Serial.printf("Image %u dense2 output: [", i);
+      for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+        Serial.printf("%.3f", logits[j]);
+        if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+      }
+      Serial.println("]");
+      Serial.printf("Image %u softmax output: [", i);
+      for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
+        Serial.printf("%.3f", output_data[j]);
+        if (j < OUTPUT_SIZE - 1) Serial.print(", ");
+      }
+      Serial.println("]");
     }
-    Serial.println("]");
-    Serial.printf("Image %u probabilities: [", i);
-    for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
-      Serial.printf("%.3f", output_data[j]);
-      if (j < OUTPUT_SIZE - 1) Serial.print(", ");
-    }
-    Serial.println("]");
 #endif
     float max_prob = output_data[0];
     for (uint32_t j = 0; j < OUTPUT_SIZE; j++) {
@@ -476,12 +534,10 @@ void test() {
                   i, predicted, true_label, predicted == true_label ? "Yes" : "No");
   }
 
-  // Print accuracy
   float accuracy = (float)correct / TEST_DATASET * 100.0f;
   Serial.printf("Testing completed, Accuracy: %.2f%% (%u/%u)\n",
                 accuracy, correct, TEST_DATASET);
 
-  // Free inference memory
   free(inference_memory);
   Serial.printf("Inference memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
 }
