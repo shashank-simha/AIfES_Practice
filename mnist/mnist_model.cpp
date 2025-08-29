@@ -356,7 +356,7 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
     }
 
     // Initialize model parameters + training memory
-    aialgo_initialize_parameters_model(&this->model);
+    // aialgo_initialize_parameters_model(&this->model);
     if(!allocate_training_memory(optimizer))
         return;
 
@@ -408,6 +408,7 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         // Print per-epoch loss
         epoch_loss /= steps;
         Serial.printf("Epoch %u/%u - Loss: %.4f\n", epoch + 1, num_epoch, epoch_loss);
+        store_model_parameters();
     }
 
     aiprint("Finished training\n");

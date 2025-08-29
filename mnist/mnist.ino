@@ -7,7 +7,7 @@
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 
-#define TRAIN_DATASET 200
+#define TRAIN_DATASET 20
 #define TEST_DATASET 20
 #define BATCH_SIZE 4
 #define EPOCHS 3
@@ -38,8 +38,7 @@ void loop() {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
             test_ds.reset();
-            // model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
-            model.test(train_ds, TRAIN_DATASET);
+            model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
             model.test(test_ds, TEST_DATASET);
         }
     }
