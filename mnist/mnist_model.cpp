@@ -71,64 +71,83 @@ bool MNISTModel::build_model() {
 
 // ===== Load pretrained weights and biases =====
 bool MNISTModel::load_weights() {
-    // ---------- Conv1 ----------
-    load_tensor_from_progmem((const float*)conv1_weights, conv1_layer.weights);
-    load_tensor_from_progmem((const float*)conv1_bias,    conv1_layer.bias);
+    if (!SPIFFS.begin(false)) { // don't format on mount failure
+        Serial.println("SPIFFS Mount Failed");
+        return false;
+    }
 
-    // ---------- Conv2 ----------
-    load_tensor_from_progmem((const float*)conv2_weights, conv2_layer.weights);
-    load_tensor_from_progmem((const float*)conv2_bias,    conv2_layer.bias);
+    const char* path = "/weights.bin";
+    File file = SPIFFS.open(path, FILE_READ);
+    if (!file) {
+        Serial.println("No saved weights found, fallback to PROGMEM");
+        return false;
+    }
 
-    // ---------- FC1 ----------
-    load_tensor_from_progmem((const float*)fc1_weights,   dense1_layer.weights);
-    load_tensor_from_progmem((const float*)fc1_bias,      dense1_layer.bias);
-
-    // ---------- FC2 ----------
-    load_tensor_from_progmem((const float*)fc2_weights,   dense2_layer.weights);
-    load_tensor_from_progmem((const float*)fc2_bias,      dense2_layer.bias);
-
-    return true;
-}
-
-// ===== Store current weights and biases =====
-bool MNISTModel::store_weights() {
     ailayer_t* current = model.input_layer;
-    uint32_t index = 0;
-
-    Serial.println("=== Model Layers ===");
     while (current) {
-        const char* layer_name = current->layer_type && current->layer_type->name
-                                 ? current->layer_type->name
-                                 : "Unknown";
-
-        int param_count = current->trainable_params_count;
-
-        Serial.printf("Layer %u: %s | Trainable params: %d\n",
-                      index, layer_name, param_count);
-
-        // If the layer has trainable params, inspect each tensor
-        for (int p = 0; p < param_count; p++) {
+        for (int p = 0; p < current->trainable_params_count; p++) {
             aitensor_t* tensor = current->trainable_params[p];
-            if (!tensor) continue;
+            if (!tensor || !tensor->data) continue;
 
-            // Calculate number of elements in this tensor
             uint32_t total_elements = 1;
             for (uint8_t d = 0; d < tensor->dim; d++) {
                 total_elements *= tensor->shape[d];
             }
 
-            Serial.printf("   Param %d: elements=%u, dims=%u, data_ptr=%p\n",
-                          p, total_elements, tensor->dim, tensor->data);
+            size_t bytes = total_elements * sizeof(float);
+            if (file.available() < bytes) {
+                Serial.println("File too small: corrupted weights?");
+                file.close();
+                return false;
+            }
+
+            file.readBytes((char*)tensor->data, bytes);
         }
 
-        if (current == model.output_layer) {
-            break;
-        }
-
+        if (current == model.output_layer) break;
         current = current->output_layer;
-        index++;
     }
-    Serial.println("====================");
+
+    file.close();
+    Serial.printf("Weights loaded from %s\n", path);
+    return true;
+}
+
+// ===== Store current weights and biases =====
+bool MNISTModel::store_weights() {
+    if (!SPIFFS.begin(false)) { // don't format on mount failure
+        Serial.println("SPIFFS Mount Failed");
+        return false;
+    }
+
+    const char* path = "/weights.bin";
+    File file = SPIFFS.open(path, FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to open file for writing");
+        return false;
+    }
+
+    ailayer_t* current = model.input_layer;
+    while (current) {
+        for (int p = 0; p < current->trainable_params_count; p++) {
+            aitensor_t* tensor = current->trainable_params[p];
+            if (!tensor || !tensor->data) continue;
+
+            uint32_t total_elements = 1;
+            for (uint8_t d = 0; d < tensor->dim; d++) {
+                total_elements *= tensor->shape[d];
+            }
+
+            // Write raw floats
+            file.write((uint8_t*)tensor->data, total_elements * sizeof(float));
+        }
+
+        if (current == model.output_layer) break;
+        current = current->output_layer;
+    }
+
+    file.close();
+    Serial.printf("Weights saved to %s\n", path);
     return true;
 }
 
@@ -207,7 +226,6 @@ bool MNISTModel::init() {
 #if PRETRAINED_WEIGHTS
     if(!load_weights())
         return false;
-    Serial.println(F("Model loaded with pretrained weights"));
 #endif
 
     store_weights();

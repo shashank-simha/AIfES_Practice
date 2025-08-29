@@ -1,7 +1,8 @@
 #pragma once
 #include <Arduino.h>
 #include <aifes.h>
-#include "mnist_weights.h"
+#include <FS.h>
+#include <SPIFFS.h>
 #include "dataset.h"
 
 // Model constants
