@@ -18,7 +18,7 @@
 #define OUTPUT_SIZE 10
 #define LAYER_COUNT 11        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 → softmax
 
-#define PRETRAINED_WEIGHTS false
+#define PRETRAINED_WEIGHTS true
 #define CONV1_WEIGHTS conv1_weights
 #define CONV1_BIAS conv1_bias
 #define CONV2_WEIGHTS conv2_weights

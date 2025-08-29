@@ -46,11 +46,13 @@ MNISTModel::~MNISTModel()
 
 // ===== Build model =====
 bool MNISTModel::build_model() {
+    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     layers[0] = model.input_layer = ailayer_input_f32_default(&input_layer);
     if (!model.input_layer) return false;
 
     conv1_layer.channel_axis = 1;
     layers[1] = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
+    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     layers[2] = ailayer_relu_f32_default(&relu1_layer, layers[1]);
     pool1_layer.channel_axis = 1;
     layers[3] = ailayer_maxpool2d_f32_default(&pool1_layer, layers[2]);
@@ -79,6 +81,7 @@ bool MNISTModel::allocate_parameter_memory() {
     aialgo_distribute_parameter_memory(&model, parameter_memory, size);
     Serial.printf("Parameter memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 size, ESP.getFreePsram());
+    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     return true;
 }
 
@@ -142,6 +145,8 @@ bool MNISTModel::init() {
 
 #if PRETRAINED_WEIGHTS
     Serial.println(F("Model loaded with pretrained weights"));
+    Serial.printf("Conv1 weights variable, ptr: %p\n", &CONV1_WEIGHTS);
+    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
 #else
     if(!allocate_parameter_memory())
         return false;

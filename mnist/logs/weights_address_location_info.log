@@ -1,0 +1,35 @@
+# Without pretrained weights (using _A)
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x1180
+load:0x403c8700,len:0xc2c
+load:0x403cb700,len:0x311c
+entry 0x403c88b8
+Initializing MNISTModel...
+Conv1 weights, dim: 0, shape: [0, 0], data_ptr: 0x0
+Conv1 weights, dim: 4, shape: [8, 1], data_ptr: 0x0
+Parameter memory allocated: 208552 bytes, Free PSRAM: 8175160 bytes
+Conv1 weights, dim: 4, shape: [8, 1], data_ptr: 0x3c0711c4
+Inference memory allocated: 50176 bytes, Free PSRAM: 8123956 bytes
+Type 't' to test the model
+
+
+# With pretrained weights (using _M)
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x1180
+load:0x403c8700,len:0xc2c
+load:0x403cb700,len:0x311c
+entry 0x403c88b8
+Initializing MNISTModel...
+Conv1 weights, dim: 0, shape: [0, 0], data_ptr: 0x3c09638c
+Conv1 weights, dim: 4, shape: [8, 1], data_ptr: 0x3c09638c
+Model loaded with pretrained weights
+Conv1 weights variable, ptr: 0x3c09638c
+Conv1 weights, dim: 4, shape: [8, 1], data_ptr: 0x3c09638c
+Inference memory allocated: 50176 bytes, Free PSRAM: 8332856 bytes
+Type 't' to test the model
