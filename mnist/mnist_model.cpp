@@ -1,3 +1,7 @@
+#include <cstddef>
+#include "HardwareSerial.h"
+#include <stdint.h>
+#include <sys/types.h>
 #include "core/aifes_core.h"
 #include "mnist_model.h"
 
@@ -58,9 +62,9 @@ bool MNISTModel::build_model() {
     layers[7] = ailayer_flatten_f32_default(&flatten_layer, layers[6]);
     layers[8] = ailayer_dense_f32_default(&dense1_layer, layers[7]);
     layers[9] = ailayer_relu_f32_default(&relu3_layer, layers[8]);
+    layers[10] = ailayer_dense_f32_default(&dense2_layer, layers[9]);
 
-    layers[10] = model.output_layer = ailayer_softmax_f32_default(
-        &softmax_layer, ailayer_dense_f32_default(&dense2_layer, layers[9]));
+    layers[11] = model.output_layer = ailayer_softmax_f32_default(&softmax_layer, layers[10]);
 
     return model.output_layer != nullptr;
 }
@@ -83,6 +87,48 @@ bool MNISTModel::load_weights() {
     load_tensor_from_progmem((const float*)fc2_weights,   dense2_layer.weights);
     load_tensor_from_progmem((const float*)fc2_bias,      dense2_layer.bias);
 
+    return true;
+}
+
+// ===== Store current weights and biases =====
+bool MNISTModel::store_weights() {
+    ailayer_t* current = model.input_layer;
+    uint32_t index = 0;
+
+    Serial.println("=== Model Layers ===");
+    while (current) {
+        const char* layer_name = current->layer_type && current->layer_type->name
+                                 ? current->layer_type->name
+                                 : "Unknown";
+
+        int param_count = current->trainable_params_count;
+
+        Serial.printf("Layer %u: %s | Trainable params: %d\n",
+                      index, layer_name, param_count);
+
+        // If the layer has trainable params, inspect each tensor
+        for (int p = 0; p < param_count; p++) {
+            aitensor_t* tensor = current->trainable_params[p];
+            if (!tensor) continue;
+
+            // Calculate number of elements in this tensor
+            uint32_t total_elements = 1;
+            for (uint8_t d = 0; d < tensor->dim; d++) {
+                total_elements *= tensor->shape[d];
+            }
+
+            Serial.printf("   Param %d: elements=%u, dims=%u, data_ptr=%p\n",
+                          p, total_elements, tensor->dim, tensor->data);
+        }
+
+        if (current == model.output_layer) {
+            break;
+        }
+
+        current = current->output_layer;
+        index++;
+    }
+    Serial.println("====================");
     return true;
 }
 
@@ -163,6 +209,8 @@ bool MNISTModel::init() {
         return false;
     Serial.println(F("Model loaded with pretrained weights"));
 #endif
+
+    store_weights();
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();

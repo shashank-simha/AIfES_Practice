@@ -16,7 +16,7 @@
 #define POOL_PADDING {0, 0}
 #define DENSE1_SIZE 64
 #define OUTPUT_SIZE 10
-#define LAYER_COUNT 11        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 → softmax
+#define LAYER_COUNT 12        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 -> dense2 → softmax
 
 #define PRETRAINED_WEIGHTS true
 
@@ -52,6 +52,7 @@ private:
     // Internal helpers
     bool build_model();
     bool load_weights();
+    bool store_weights();
     bool allocate_parameter_memory();
     void free_parameter_memory();
     bool allocate_training_memory(aiopti_t *optimizer);
