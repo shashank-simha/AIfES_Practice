@@ -1,26 +1,8 @@
 #include "core/aifes_core.h"
 #include "mnist_model.h"
 
-// ===== Layers (weights already included via mnist_weights.h) =====
-#if PRETRAINED_WEIGHTS
+// ===== Layers =====
 static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);
-static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(
-    CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, CONV1_WEIGHTS, CONV1_BIAS);
-static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_M();
-static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-static ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_M(
-    CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, CONV2_WEIGHTS, CONV2_BIAS);
-static ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_M();
-static ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-static ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_M();
-static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, FC1_WEIGHTS, FC1_BIAS);
-static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_M();
-static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, FC2_WEIGHTS, FC2_BIAS);
-static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_M();
-#else
-static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-
 static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
 static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_A(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
 static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_A();
@@ -33,7 +15,19 @@ static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_A(DENSE1_SIZE);
 static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();
 static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
 static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
-#endif
+
+// Generic helper: load tensor from PROGMEM into AIfES tensor
+void load_tensor_from_progmem(const float* src, aitensor_t& dst) {
+    uint32_t num_elements = 1;
+    for (uint32_t d = 0; d < dst.dim; d++) {
+        num_elements *= dst.shape[d];
+    }
+
+    float* dst_data = (float*)dst.data;
+    for (uint32_t i = 0; i < num_elements; i++) {
+        dst_data[i] = pgm_read_float(&src[i]);
+    }
+}
 
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr) {}
@@ -46,13 +40,11 @@ MNISTModel::~MNISTModel()
 
 // ===== Build model =====
 bool MNISTModel::build_model() {
-    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     layers[0] = model.input_layer = ailayer_input_f32_default(&input_layer);
     if (!model.input_layer) return false;
 
     conv1_layer.channel_axis = 1;
     layers[1] = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
-    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     layers[2] = ailayer_relu_f32_default(&relu1_layer, layers[1]);
     pool1_layer.channel_axis = 1;
     layers[3] = ailayer_maxpool2d_f32_default(&pool1_layer, layers[2]);
@@ -73,6 +65,27 @@ bool MNISTModel::build_model() {
     return model.output_layer != nullptr;
 }
 
+// ===== Load pretrained weights and biases =====
+bool MNISTModel::load_weights() {
+    // ---------- Conv1 ----------
+    load_tensor_from_progmem((const float*)conv1_weights, conv1_layer.weights);
+    load_tensor_from_progmem((const float*)conv1_bias,    conv1_layer.bias);
+
+    // ---------- Conv2 ----------
+    load_tensor_from_progmem((const float*)conv2_weights, conv2_layer.weights);
+    load_tensor_from_progmem((const float*)conv2_bias,    conv2_layer.bias);
+
+    // ---------- FC1 ----------
+    load_tensor_from_progmem((const float*)fc1_weights,   dense1_layer.weights);
+    load_tensor_from_progmem((const float*)fc1_bias,      dense1_layer.bias);
+
+    // ---------- FC2 ----------
+    load_tensor_from_progmem((const float*)fc2_weights,   dense2_layer.weights);
+    load_tensor_from_progmem((const float*)fc2_bias,      dense2_layer.bias);
+
+    return true;
+}
+
 // ===== Memory handling =====
 bool MNISTModel::allocate_parameter_memory() {
     uint32_t size = aialgo_sizeof_parameter_memory(&model);
@@ -81,7 +94,6 @@ bool MNISTModel::allocate_parameter_memory() {
     aialgo_distribute_parameter_memory(&model, parameter_memory, size);
     Serial.printf("Parameter memory allocated: %u bytes, Free PSRAM: %u bytes\n",
                 size, ESP.getFreePsram());
-    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
     return true;
 }
 
@@ -143,13 +155,13 @@ bool MNISTModel::init() {
         return false;
     }
 
-#if PRETRAINED_WEIGHTS
-    Serial.println(F("Model loaded with pretrained weights"));
-    Serial.printf("Conv1 weights variable, ptr: %p\n", &CONV1_WEIGHTS);
-    Serial.printf("Conv1 weights, dim: %u, shape: [%u, %u], data_ptr: %p\n", conv1_layer.weights.dim, conv1_layer.weights_shape[0], conv1_layer.weights_shape[1], conv1_layer.weights.data);
-#else
     if(!allocate_parameter_memory())
         return false;
+
+#if PRETRAINED_WEIGHTS
+    if(!load_weights())
+        return false;
+    Serial.println(F("Model loaded with pretrained weights"));
 #endif
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */

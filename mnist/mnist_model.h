@@ -19,14 +19,6 @@
 #define LAYER_COUNT 11        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 → softmax
 
 #define PRETRAINED_WEIGHTS true
-#define CONV1_WEIGHTS conv1_weights
-#define CONV1_BIAS conv1_bias
-#define CONV2_WEIGHTS conv2_weights
-#define CONV2_BIAS conv2_bias
-#define FC1_WEIGHTS fc1_weights
-#define FC1_BIAS fc1_bias
-#define FC2_WEIGHTS fc2_weights
-#define FC2_BIAS fc2_bias
 
 // ==========================
 // MNIST Model Wrapper Class
@@ -59,6 +51,7 @@ private:
 
     // Internal helpers
     bool build_model();
+    bool load_weights();
     bool allocate_parameter_memory();
     void free_parameter_memory();
     bool allocate_training_memory(aiopti_t *optimizer);
