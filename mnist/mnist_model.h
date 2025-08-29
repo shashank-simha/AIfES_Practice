@@ -17,7 +17,6 @@
 #define POOL_PADDING {0, 0}
 #define DENSE1_SIZE 64
 #define OUTPUT_SIZE 10
-#define LAYER_COUNT 12        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 -> dense2 → softmax
 
 // ==========================
 // MNIST Model Wrapper Class
@@ -43,7 +42,6 @@ public:
 private:
     // Model definition
     aimodel_t model;
-    ailayer_t* layers[LAYER_COUNT];
     void* parameter_memory;
     void* training_memory;
     void* inference_memory;

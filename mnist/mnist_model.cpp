@@ -1,20 +1,5 @@
 #include "mnist_model.h"
 
-// ===== Layers =====
-static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
-static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_A(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
-static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_A();
-static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-static ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_A(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
-static ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_A();
-static ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-static ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_A();
-static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_A(DENSE1_SIZE);
-static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();
-static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
-static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
-
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr)
 {
@@ -30,30 +15,59 @@ MNISTModel::~MNISTModel()
 
 // ===== Build model =====
 bool MNISTModel::build_model() {
-    layers[0] = model.input_layer = ailayer_input_f32_default(&input_layer);
+    // ===== Layers =====
+    static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+    static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
+    static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_A(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
+    static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_A();
+    static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
+    static ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_A(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
+    static ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_A();
+    static ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
+    static ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_A();
+    static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_A(DENSE1_SIZE);
+    static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();
+    static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
+    static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
+
+    // Layer pointer to perform the connection
+    ailayer_t *x;    
+
+    model.input_layer = ailayer_input_f32_default(&input_layer);
     if (!model.input_layer) return false;
 
-    layers[1] = ailayer_conv2d_chw_f32_default(&conv1_layer, model.input_layer);
-    layers[2] = ailayer_relu_f32_default(&relu1_layer, layers[1]);
-    layers[3] = ailayer_maxpool2d_chw_f32_default(&pool1_layer, layers[2]);
+    x = ailayer_conv2d_chw_f32_default(&conv1_layer, model.input_layer);
+    if (!x) return false;
+    x = ailayer_relu_f32_default(&relu1_layer, x);
+    if (!x) return false;
+    x = ailayer_maxpool2d_chw_f32_default(&pool1_layer, x);
+    if (!x) return false;
 
-    layers[4] = ailayer_conv2d_chw_f32_default(&conv2_layer, layers[3]);
-    layers[5] = ailayer_relu_f32_default(&relu2_layer, layers[4]);
-    layers[6] = ailayer_maxpool2d_chw_f32_default(&pool2_layer, layers[5]);
+    x = ailayer_conv2d_chw_f32_default(&conv2_layer, x);
+    if (!x) return false;
+    x = ailayer_relu_f32_default(&relu2_layer, x);
+    if (!x) return false;
+    x = ailayer_maxpool2d_chw_f32_default(&pool2_layer, x);
+    if (!x) return false;
 
-    layers[7] = ailayer_flatten_f32_default(&flatten_layer, layers[6]);
-    layers[8] = ailayer_dense_f32_default(&dense1_layer, layers[7]);
-    layers[9] = ailayer_relu_f32_default(&relu3_layer, layers[8]);
-    layers[10] = ailayer_dense_f32_default(&dense2_layer, layers[9]);
+    x = ailayer_flatten_f32_default(&flatten_layer, x);
+    if (!x) return false;
+    x = ailayer_dense_f32_default(&dense1_layer, x);
+    if (!x) return false;
+    x = ailayer_relu_f32_default(&relu3_layer, x);
+    if (!x) return false;
+    x = ailayer_dense_f32_default(&dense2_layer, x);
+    if (!x) return false;
 
-    layers[11] = model.output_layer = ailayer_softmax_f32_default(&softmax_layer, layers[10]);
+    model.output_layer = ailayer_softmax_f32_default(&softmax_layer, x);
+    if (!model.output_layer) return false;
 
-    return model.output_layer != nullptr;
+    return true;
 }
 
 // ===== Load pretrained weights and biases (chunked read + file size check) =====
 bool MNISTModel::load_model_parameters() {
-    Serial.println("Storing model parameters.......");
+    Serial.println("Loading model parameters.......");
 
     if (!SPIFFS.begin(false)) { // don't format on mount failure
         Serial.println("SPIFFS Mount Failed, continuing with current parameters");
