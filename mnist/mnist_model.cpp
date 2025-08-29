@@ -15,19 +15,6 @@ static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();
 static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
 static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
 
-// Generic helper: load tensor from PROGMEM into AIfES tensor
-void load_tensor_from_progmem(const float* src, aitensor_t& dst) {
-    uint32_t num_elements = 1;
-    for (uint32_t d = 0; d < dst.dim; d++) {
-        num_elements *= dst.shape[d];
-    }
-
-    float* dst_data = (float*)dst.data;
-    for (uint32_t i = 0; i < num_elements; i++) {
-        dst_data[i] = pgm_read_float(&src[i]);
-    }
-}
-
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr) {}
 MNISTModel::~MNISTModel()
@@ -74,6 +61,8 @@ bool MNISTModel::load_weights() {
         return false;
     }
 
+    const size_t CHUNK_SIZE = 4096; // 4 KB per read
+
     ailayer_t* current = model.input_layer;
     while (current) {
         for (int p = 0; p < current->trainable_params_count; p++) {
@@ -81,18 +70,27 @@ bool MNISTModel::load_weights() {
             if (!tensor || !tensor->data) continue;
 
             uint32_t total_elements = 1;
-            for (uint8_t d = 0; d < tensor->dim; d++) {
+            for (uint8_t d = 0; d < tensor->dim; d++)
                 total_elements *= tensor->shape[d];
-            }
 
-            size_t bytes = total_elements * sizeof(float);
-            if (file.available() < bytes) {
-                Serial.println("File too small: corrupted weights?");
-                file.close();
-                return false;
-            }
+            float* data_ptr = (float*)tensor->data;
+            size_t remaining = total_elements * sizeof(float);
 
-            file.readBytes((char*)tensor->data, bytes);
+            Serial.printf("Layer %s | Param %d | total_elements=%u | reading %u bytes\n",
+                          current->layer_type->name, p, total_elements, remaining);
+
+            while (remaining > 0) {
+                size_t to_read = remaining > CHUNK_SIZE ? CHUNK_SIZE : remaining;
+                size_t read_bytes = file.read((uint8_t*)data_ptr, to_read);
+                if (read_bytes != to_read) {
+                    Serial.printf("ERROR: failed to read chunk, expected=%u, got=%u\n", to_read, read_bytes);
+                    file.close();
+                    return false;
+                }
+                remaining -= read_bytes;
+                data_ptr += read_bytes / sizeof(float);
+            }
+            Serial.printf("Param %d loaded successfully\n", p);
         }
 
         if (current == model.output_layer) break;
@@ -104,9 +102,10 @@ bool MNISTModel::load_weights() {
     return true;
 }
 
+
 // ===== Store current weights and biases =====
 bool MNISTModel::store_weights() {
-    if (!SPIFFS.begin(false)) {
+    if (!SPIFFS.begin(false)) { // don't format on mount failure
         Serial.println("SPIFFS Mount Failed");
         return false;
     }
@@ -118,54 +117,48 @@ bool MNISTModel::store_weights() {
         return false;
     }
 
-    Serial.println("=== Storing weights ===");
-    ailayer_t* current = model.input_layer;
-    int layer_idx = 0;
-    while (current) {
-        Serial.printf("Layer %d: %s | trainable_params_count=%d\n",
-                      layer_idx,
-                      current->layer_type ? current->layer_type->name : "unknown",
-                      current->trainable_params_count);
+    const size_t CHUNK_SIZE = 4096; // 4 KB per write
 
+    ailayer_t* current = model.input_layer;
+    while (current) {
         for (int p = 0; p < current->trainable_params_count; p++) {
             aitensor_t* tensor = current->trainable_params[p];
-            if (!tensor) {
-                Serial.printf("  Param %d: NULL tensor\n", p);
-                continue;
-            }
-            if (!tensor->data) {
-                Serial.printf("  Param %d: NULL data\n", p);
-                continue;
-            }
+            if (!tensor || !tensor->data) continue;
 
             uint32_t total_elements = 1;
-            Serial.print("  Param "); Serial.print(p); Serial.print(": shape=[");
-            for (uint8_t d = 0; d < tensor->dim; d++) {
+            for (uint8_t d = 0; d < tensor->dim; d++)
                 total_elements *= tensor->shape[d];
-                Serial.print(tensor->shape[d]);
-                if (d < tensor->dim - 1) Serial.print(",");
-            }
-            Serial.print("] total_elements="); Serial.println(total_elements);
 
-            size_t bytes_written = file.write((uint8_t*)tensor->data, total_elements * sizeof(float));
-            if (bytes_written != total_elements * sizeof(float)) {
-                Serial.printf("  ERROR: wrote %u bytes, expected %u bytes\n",
-                              (unsigned)bytes_written,
-                              (unsigned)(total_elements * sizeof(float)));
-            } else {
-                Serial.println("  Written successfully");
+            float* data_ptr = (float*)tensor->data;
+            size_t remaining = total_elements * sizeof(float);
+
+            Serial.printf("Layer %s | Param %d | total_elements=%u | writing %u bytes\n",
+                          current->layer_type->name, p, total_elements, remaining);
+
+            while (remaining > 0) {
+                size_t to_write = remaining > CHUNK_SIZE ? CHUNK_SIZE : remaining;
+                size_t written = file.write((uint8_t*)data_ptr, to_write);
+                if (written != to_write) {
+                    Serial.printf("ERROR: failed to write chunk, expected=%u, wrote=%u\n", to_write, written);
+                    file.close();
+                    return false;
+                }
+                remaining -= written;
+                data_ptr += written / sizeof(float);
             }
+            Serial.printf("Param %d written successfully\n", p);
         }
 
         if (current == model.output_layer) break;
         current = current->output_layer;
-        layer_idx++;
     }
 
     file.close();
     Serial.printf("Weights saved to %s\n", path);
     return true;
 }
+
+
 
 // ===== Memory handling =====
 bool MNISTModel::allocate_parameter_memory() {
