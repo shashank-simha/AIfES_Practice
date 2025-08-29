@@ -1,29 +1,48 @@
+#include "core/aifes_core.h"
 #include "mnist_model.h"
 
 // ===== Layers (weights already included via mnist_weights.h) =====
+#if PRETRAINED_WEIGHTS
 static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
-
 static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_M(4, input_shape);
-
 static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_M(
-    CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv1_weights, conv1_bias);
+    CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, CONV1_WEIGHTS, CONV1_BIAS);
 static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_M();
 static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-
 static ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_M(
-    CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, conv2_weights, conv2_bias);
+    CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING, CONV2_WEIGHTS, CONV2_BIAS);
 static ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_M();
 static ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_M(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
-
 static ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_M();
-static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, fc1_weights, fc1_bias);
+static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_M(DENSE1_SIZE, FC1_WEIGHTS, FC1_BIAS);
 static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_M();
-static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, fc2_weights, fc2_bias);
+static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_M(OUTPUT_SIZE, FC2_WEIGHTS, FC2_BIAS);
 static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_M();
+#else
+static uint16_t input_shape[] = {1, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH};
+
+static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
+static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_A(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
+static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_A();
+static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
+static ailayer_conv2d_f32_t conv2_layer = AILAYER_CONV2D_F32_A(CONV2_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
+static ailayer_relu_f32_t relu2_layer = AILAYER_RELU_F32_A();
+static ailayer_maxpool2d_f32_t pool2_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
+static ailayer_flatten_f32_t flatten_layer = AILAYER_FLATTEN_F32_A();
+static ailayer_dense_f32_t dense1_layer = AILAYER_DENSE_F32_A(DENSE1_SIZE);
+static ailayer_relu_f32_t relu3_layer = AILAYER_RELU_F32_A();
+static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
+static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
+#endif
 
 // ===== Constructor / Destructor =====
-MNISTModel::MNISTModel() : inference_memory(nullptr) {}
-MNISTModel::~MNISTModel() { free_inference_memory(); }
+MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr) {}
+MNISTModel::~MNISTModel()
+{ 
+    free_parameter_memory();
+    free_training_memory();
+    free_inference_memory();
+}
 
 // ===== Build model =====
 bool MNISTModel::build_model() {
@@ -53,12 +72,50 @@ bool MNISTModel::build_model() {
 }
 
 // ===== Memory handling =====
+bool MNISTModel::allocate_parameter_memory() {
+    uint32_t size = aialgo_sizeof_parameter_memory(&model);
+    parameter_memory = ps_malloc(size);
+    if (!parameter_memory) return false;
+    aialgo_distribute_parameter_memory(&model, parameter_memory, size);
+    Serial.printf("Parameter memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+                size, ESP.getFreePsram());
+    return true;
+}
+
+void MNISTModel::free_parameter_memory() {
+    if (parameter_memory) {
+        free(parameter_memory);
+        parameter_memory = nullptr;
+        Serial.printf("Parameter memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
+    }
+}
+
+bool MNISTModel::allocate_training_memory(aiopti_t *optimizer) {
+    uint32_t size = aialgo_sizeof_training_memory(&model, optimizer);
+    training_memory = ps_malloc(size);
+    if (!training_memory) return false;
+    aialgo_schedule_training_memory(&model, optimizer, training_memory, size);
+    aialgo_init_model_for_training(&model, optimizer);
+    Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+                size, ESP.getFreePsram());
+    return true;
+}
+
+void MNISTModel::free_training_memory() {
+    if (training_memory) {
+        free(training_memory);
+        training_memory = nullptr;
+        Serial.printf("Training memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
+    }
+}
+
 bool MNISTModel::allocate_inference_memory() {
     uint32_t size = aialgo_sizeof_inference_memory(&model);
     inference_memory = ps_malloc(size);
     if (!inference_memory) return false;
     aialgo_schedule_inference_memory(&model, inference_memory, size);
-    Serial.printf("Inference memory allocated: %u bytes\n", size);
+    Serial.printf("Inference memory allocated: %u bytes, Free PSRAM: %u bytes\n",
+                size, ESP.getFreePsram());
     return true;
 }
 
@@ -66,7 +123,7 @@ void MNISTModel::free_inference_memory() {
     if (inference_memory) {
         free(inference_memory);
         inference_memory = nullptr;
-        Serial.println(F("Inference memory freed"));
+        Serial.printf("Inference memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
     }
 }
 
@@ -82,6 +139,15 @@ bool MNISTModel::init() {
         Serial.println(F("Model compilation failed"));
         return false;
     }
+
+#if PRETRAINED_WEIGHTS
+    Serial.println(F("Model loaded with pretrained weights"));
+#else
+    if(!allocate_parameter_memory())
+        return false;
+#endif
+
+    /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();
 }
 
@@ -137,177 +203,86 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
 }
 
 
-// // Train dataset
-// void MNISTModel::train(Dataset& ds, uint32_t num_samples) {
-//     Serial.printf("Training on %u images...\n", num_samples);
+// Train dataset
+void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch) {
+    Serial.printf("Training on %u images...\n", num_samples);
 
-//     // Allocate input/target buffers for one batch
-//     float* input_buffer = (float*)ps_malloc(BATCH_SIZE * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
-//     uint8_t* target_buffer = (uint8_t*)ps_malloc(BATCH_SIZE * sizeof(uint8_t));
-//     if (!input_buffer || !target_buffer) {
-//         Serial.println(F("Buffer allocation failed"));
-//         return;
-//     }
+    // Configure cross-entropy loss
+    ailoss_crossentropy_f32_t crossentropy_loss;
+    this->model.loss = ailoss_crossentropy_f32_default(&crossentropy_loss, this->model.output_layer);
+    if (!this->model.loss) {
+        Serial.println(F("Loss initialization failed"));
+        return;
+    }
 
-//     // Configure cross-entropy loss
-//     ailoss_crossentropy_f32_t crossentropy_loss;
-//     this->loss = ailoss_crossentropy_f32_default(&crossentropy_loss, this->output_layer);
-//     if (!this->loss) {
-//         Serial.println(F("Loss initialization failed"));
-//         return;
-//     }
+    // Configure SGD optimizer
+    aiopti_sgd_f32_t sgd_opti = { .learning_rate = 0.001f };
+    aiopti_t* optimizer = aiopti_sgd_f32_default(&sgd_opti);
+    if (!optimizer) {
+        Serial.println(F("Optimizer initialization failed"));
+        return;
+    }
 
-//     // Configure SGD optimizer
-//     aiopti_sgd_f32_t sgd_opti = { .learning_rate = LEARNING_RATE };
-//     aiopti_t* optimizer = aiopti_sgd_f32_default(&sgd_opti);
-//     if (!optimizer) {
-//         Serial.println(F("Optimizer initialization failed"));
-//         return;
-//     }
+    // Initialize model parameters + training memory
+    aialgo_initialize_parameters_model(&this->model);
+    if(!allocate_training_memory(optimizer))
+        return;
 
-//     // Initialize model parameters + training memory
-//     aialgo_initialize_parameters_model(&this->model);
-//     uint32_t training_memory_size = aialgo_sizeof_training_memory(&this->model, optimizer);
-//     void* training_memory = ps_malloc(training_memory_size);
-//     if (!training_memory) {
-//         Serial.println(F("Training memory allocation failed"));
-//         return;
-//     }
-//     aialgo_schedule_training_memory(&this->model, optimizer, training_memory, training_memory_size);
-//     aialgo_init_model_for_training(&this->model, optimizer);
+    // Allocate input/target buffers for one batch
+    float* input_buffer = (float*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
+    uint8_t* target_buffer = (uint8_t*)ps_malloc(batch_size * sizeof(uint8_t));
+    float* target_onehot_buffer = (float*)ps_malloc(batch_size * OUTPUT_SIZE * sizeof(float));
+    if (!input_buffer || !target_buffer || !target_onehot_buffer) {
+        Serial.println(F("Buffer allocation failed"));
+        if (input_buffer) free(input_buffer);
+        if (target_buffer) free(target_buffer);
+        if (target_onehot_buffer) free(target_onehot_buffer);
+        free_training_memory();
+        return;
+    }
 
-//     // Training loop
-//     aiprint("Start training\n");
-//     for (uint32_t epoch = 0; epoch < EPOCHS; epoch++) {
-//         uint32_t steps = num_samples / BATCH_SIZE;
-//         float epoch_loss = 0.0f;
+    // Training loop
+    for (uint32_t epoch = 0; epoch < num_epoch; epoch++) {
+        uint32_t steps = num_samples / batch_size;
+        float epoch_loss = 0.0f;
 
-//         for (uint32_t step = 0; step < steps; step++) {
-//             // Get batch
-//             ds.next_batch(BATCH_SIZE, input_buffer, target_buffer);
+        for (uint32_t step = 0; step < steps; step++) {
+            // Get batch
+            ds.next_batch(batch_size, input_buffer, target_buffer);
 
-//             // Create tensors
-//             const uint16_t input_shape[] = { BATCH_SIZE, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-//             const uint16_t target_shape[] = { BATCH_SIZE };
-//             aitensor_t input_tensor  = AITENSOR_4D_F32(input_shape, input_buffer);
-//             aitensor_t target_tensor = AITENSOR_1D_U8(target_shape, target_buffer);
+            // Convert labels → one-hot float32
+            for (uint32_t i = 0; i < batch_size; i++) {
+                for (uint32_t c = 0; c < OUTPUT_SIZE; c++) {
+                    target_onehot_buffer[i * OUTPUT_SIZE + c] =
+                        (target_buffer[i] == c) ? 1.0f : 0.0f;
+                }
+            }
 
-//             // Train step
-//             aialgo_train_model(&this->model, &input_tensor, &target_tensor, optimizer, BATCH_SIZE);
+            // Create tensors
+            const uint16_t input_shape[] = { batch_size, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
+            const uint16_t target_shape[] = { batch_size, OUTPUT_SIZE };
+            aitensor_t input_tensor  = AITENSOR_4D_F32(input_shape, input_buffer);
+            aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, target_onehot_buffer);
 
-//             // Track batch loss
-//             float batch_loss;
-//             aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &batch_loss);
-//             epoch_loss += batch_loss;
-//         }
+            // Train step
+            aialgo_train_model(&this->model, &input_tensor, &target_tensor, optimizer, batch_size);
 
-//         // Print per-epoch loss
-//         epoch_loss /= steps;
-//         Serial.printf("Epoch %u/%u - Loss: %.4f\n", epoch + 1, EPOCHS, epoch_loss);
-//     }
+            // Track batch loss
+            float batch_loss;
+            aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &batch_loss);
+            epoch_loss += batch_loss;
+        }
 
-//     aiprint("Finished training\n");
+        // Print per-epoch loss
+        epoch_loss /= steps;
+        Serial.printf("Epoch %u/%u - Loss: %.4f\n", epoch + 1, num_epoch, epoch_loss);
+    }
 
-//     // Cleanup
-//     free(input_buffer);
-//     free(target_buffer);
-//     free(training_memory);
-//     Serial.printf("Training memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
-// }
+    aiprint("Finished training\n");
 
-
-// // Inside mnist_model.h or mnist_model.cpp
-
-// void MNISTModel::train() {
-//   Serial.println(F("Training..."));
-// #if DEBUG
-//   Serial.printf("Free SRAM before: %u bytes\n", ESP.getFreeHeap());
-// #endif
-
-//   // Configure cross-entropy loss
-//   ailoss_crossentropy_f32_t crossentropy_loss;
-//   this->loss = ailoss_crossentropy_f32_default(&crossentropy_loss, this->output_layer);
-//   if (!this->loss) {
-//     Serial.println(F("Loss initialization failed"));
-//     while (1);
-//   }
-// #if DEBUG
-//   aiprint("\nLoss specs:\n");
-//   aialgo_print_loss_specs(this->loss);
-//   aiprint("\n");
-// #endif
-
-//   // Configure SGD optimizer
-//   aiopti_sgd_f32_t sgd_opti = { .learning_rate = LEARNING_RATE };
-//   aiopti_t *optimizer = aiopti_sgd_f32_default(&sgd_opti);
-//   if (!optimizer) {
-//     Serial.println(F("Optimizer initialization failed"));
-//     while (1);
-//   }
-// #if DEBUG
-//   aiprint("Optimizer specs:\n");
-//   aialgo_print_optimizer_specs(optimizer);
-//   aiprint("\n");
-// #endif
-
-//   // Initialize model parameters
-//   aialgo_initialize_parameters_model(&this->model);
-//   Serial.println(F("Parameters initialized"));
-
-//   // Allocate training memory in PSRAM
-//   uint32_t training_memory_size = aialgo_sizeof_training_memory(&this->model, optimizer);
-//   void *training_memory = ps_malloc(training_memory_size);
-//   if (!training_memory) {
-//     Serial.println(F("Training memory allocation failed"));
-//     while (1);
-//   }
-//   aialgo_schedule_training_memory(&this->model, optimizer, training_memory, training_memory_size);
-//   aialgo_init_model_for_training(&this->model, optimizer);
-//   Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
-//                 training_memory_size, ESP.getFreePsram());
-
-//   // Input/target tensors from PROGMEM
-//   const uint16_t input_shape[]  = { TRAIN_DATASET, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
-//   const uint16_t target_shape[] = { TRAIN_DATASET }; // labels are uint8 (class indices)
-//   aitensor_t input_tensor  = AITENSOR_4D_U8(input_shape, (uint8_t *)train_input_data);
-//   aitensor_t target_tensor = AITENSOR_1D_U8(target_shape, (uint8_t *)train_target_data);
-
-// #if DEBUG
-//   Serial.printf("Input tensor shape: [%u,%u,%u,%u]\n",
-//                 input_tensor.shape[0], input_tensor.shape[1],
-//                 input_tensor.shape[2], input_tensor.shape[3]);
-//   Serial.printf("Target tensor shape: [%u]\n", target_tensor.shape[0]);
-//   Serial.printf("Free SRAM after tensors: %u bytes\n", ESP.getFreeHeap());
-// #endif
-
-//   // Test forward pass
-//   Serial.println(F("Testing forward pass"));
-//   aitensor_t *output_tensor = aialgo_forward_model(&this->model, &input_tensor);
-//   if (!output_tensor) {
-//     Serial.println(F("Forward pass failed"));
-//     while (1);
-//   }
-//   Serial.println(F("Forward pass completed"));
-
-//   // Training loop
-//   float loss;
-//   aiprint("Start training\n");
-//   for (int i = 0; i < EPOCHS; i++) {
-//     aialgo_train_model(&this->model, &input_tensor, &target_tensor, optimizer, BATCH_SIZE);
-
-//     if (i % PRINT_INTERVAL == 0) {
-//       aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &loss);
-//       aiprint("Epoch ");
-//       aiprint_int("%5d", i);
-//       aiprint(": train loss: ");
-//       aiprint_float("%f", loss);
-//       aiprint("\n");
-//     }
-//   }
-//   aiprint("Finished training\n");
-
-//   // Free training memory
-//   free(training_memory);
-//   Serial.printf("Training memory freed, Free PSRAM: %u bytes\n", ESP.getFreePsram());
-// }
-
+    // Cleanup
+    free(input_buffer);
+    free(target_buffer);
+    free(target_onehot_buffer);
+    free_training_memory();
+}
