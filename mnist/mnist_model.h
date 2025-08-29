@@ -19,8 +19,6 @@
 #define OUTPUT_SIZE 10
 #define LAYER_COUNT 12        // Input → conv1 → relu1 → pool1 → conv2 → relu2 → pool2 → flatten → dense1 → relu3 -> dense2 → softmax
 
-#define PRETRAINED_WEIGHTS true
-
 // ==========================
 // MNIST Model Wrapper Class
 // ==========================
@@ -49,11 +47,12 @@ private:
     void* parameter_memory;
     void* training_memory;
     void* inference_memory;
+    const char* params_file_path;
 
     // Internal helpers
     bool build_model();
-    bool load_weights();
-    bool store_weights();
+    bool load_model_parameters();
+    bool store_model_parameters();
     bool allocate_parameter_memory();
     void free_parameter_memory();
     bool allocate_training_memory(aiopti_t *optimizer);

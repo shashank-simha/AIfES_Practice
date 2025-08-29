@@ -16,7 +16,11 @@ static ailayer_dense_f32_t dense2_layer = AILAYER_DENSE_F32_A(OUTPUT_SIZE);
 static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
 
 // ===== Constructor / Destructor =====
-MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr) {}
+MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr)
+{
+    this->params_file_path = "/params.bin";
+}
+
 MNISTModel::~MNISTModel()
 { 
     free_parameter_memory();
@@ -47,21 +51,29 @@ bool MNISTModel::build_model() {
     return model.output_layer != nullptr;
 }
 
-// ===== Load pretrained weights and biases =====
-bool MNISTModel::load_weights() {
+// ===== Load pretrained weights and biases (chunked read + file size check) =====
+bool MNISTModel::load_model_parameters() {
+    Serial.println("Storing model parameters.......");
+
     if (!SPIFFS.begin(false)) { // don't format on mount failure
-        Serial.println("SPIFFS Mount Failed");
-        return false;
+        Serial.println("SPIFFS Mount Failed, continuing with current parameters");
+        return true;
     }
 
-    const char* path = "/weights.bin";
-    File file = SPIFFS.open(path, FILE_READ);
+    File file = SPIFFS.open(this->params_file_path, FILE_READ);
     if (!file) {
-        Serial.println("No saved weights found, fallback to PROGMEM");
-        return false;
+        Serial.println("No saved parameters found, continuing with current parameters");
+        return true;
     }
 
-    const size_t CHUNK_SIZE = 4096; // 4 KB per read
+    size_t expected_bytes = aialgo_sizeof_parameter_memory(&model);
+    size_t actual_bytes = file.size();
+
+    if (actual_bytes != expected_bytes) {
+        Serial.printf("Warning: file size mismatch! expected=%u, actual=%u\n", (unsigned)expected_bytes, (unsigned)actual_bytes);
+        Serial.println("Continuing with current parameters");
+        return true;
+    }
 
     ailayer_t* current = model.input_layer;
     while (current) {
@@ -70,27 +82,31 @@ bool MNISTModel::load_weights() {
             if (!tensor || !tensor->data) continue;
 
             uint32_t total_elements = 1;
-            for (uint8_t d = 0; d < tensor->dim; d++)
+            for (uint8_t d = 0; d < tensor->dim; d++) {
                 total_elements *= tensor->shape[d];
+            }
 
-            float* data_ptr = (float*)tensor->data;
-            size_t remaining = total_elements * sizeof(float);
+            size_t bytes = total_elements * sizeof(float);
+            if (file.available() < bytes) {
+                Serial.println("Fatal: file too small, corrupted parameters?");
+                file.close();
+                return false;
+            }
 
-            Serial.printf("Layer %s | Param %d | total_elements=%u | reading %u bytes\n",
-                          current->layer_type->name, p, total_elements, remaining);
+            size_t read_bytes = 0;
+            uint8_t* data_ptr = (uint8_t*)tensor->data;
+            const size_t CHUNK_SIZE = 1024;
 
-            while (remaining > 0) {
-                size_t to_read = remaining > CHUNK_SIZE ? CHUNK_SIZE : remaining;
-                size_t read_bytes = file.read((uint8_t*)data_ptr, to_read);
-                if (read_bytes != to_read) {
-                    Serial.printf("ERROR: failed to read chunk, expected=%u, got=%u\n", to_read, read_bytes);
+            while (read_bytes < bytes) {
+                size_t to_read = min(CHUNK_SIZE, bytes - read_bytes);
+                size_t ret = file.read(data_ptr + read_bytes, to_read);
+                if (ret != to_read) {
+                    Serial.printf("Fatal: read %u bytes, expected %u\n", (unsigned)ret, (unsigned)to_read);
                     file.close();
                     return false;
                 }
-                remaining -= read_bytes;
-                data_ptr += read_bytes / sizeof(float);
+                read_bytes += ret;
             }
-            Serial.printf("Param %d loaded successfully\n", p);
         }
 
         if (current == model.output_layer) break;
@@ -98,55 +114,56 @@ bool MNISTModel::load_weights() {
     }
 
     file.close();
-    Serial.printf("Weights loaded from %s\n", path);
+    Serial.printf("Parameters loaded from %s\n", this->params_file_path);
     return true;
 }
 
+// ===== Store current weights and biases (chunked write + temp file + rename) =====
+bool MNISTModel::store_model_parameters() {
+    Serial.println("Storing model parameters.......");
 
-// ===== Store current weights and biases =====
-bool MNISTModel::store_weights() {
     if (!SPIFFS.begin(false)) { // don't format on mount failure
-        Serial.println("SPIFFS Mount Failed");
+        Serial.println("SPIFFS Mount Failed, skipping storing parameters");
         return false;
     }
 
-    const char* path = "/weights.bin";
-    File file = SPIFFS.open(path, FILE_WRITE);
+    char tmp_path[64];
+    sprintf(tmp_path, "%s.tmp", this->params_file_path);
+    File file = SPIFFS.open(tmp_path, FILE_WRITE);
     if (!file) {
-        Serial.println("Failed to open file for writing");
-        return false;
+        Serial.println("Failed to open temp file for writing, skipping storing parameters");
+        return true;
     }
-
-    const size_t CHUNK_SIZE = 4096; // 4 KB per write
 
     ailayer_t* current = model.input_layer;
+    size_t total_bytes_written = 0;
+
     while (current) {
         for (int p = 0; p < current->trainable_params_count; p++) {
             aitensor_t* tensor = current->trainable_params[p];
             if (!tensor || !tensor->data) continue;
 
             uint32_t total_elements = 1;
-            for (uint8_t d = 0; d < tensor->dim; d++)
+            for (uint8_t d = 0; d < tensor->dim; d++) {
                 total_elements *= tensor->shape[d];
-
-            float* data_ptr = (float*)tensor->data;
-            size_t remaining = total_elements * sizeof(float);
-
-            Serial.printf("Layer %s | Param %d | total_elements=%u | writing %u bytes\n",
-                          current->layer_type->name, p, total_elements, remaining);
-
-            while (remaining > 0) {
-                size_t to_write = remaining > CHUNK_SIZE ? CHUNK_SIZE : remaining;
-                size_t written = file.write((uint8_t*)data_ptr, to_write);
-                if (written != to_write) {
-                    Serial.printf("ERROR: failed to write chunk, expected=%u, wrote=%u\n", to_write, written);
-                    file.close();
-                    return false;
-                }
-                remaining -= written;
-                data_ptr += written / sizeof(float);
             }
-            Serial.printf("Param %d written successfully\n", p);
+
+            size_t bytes = total_elements * sizeof(float);
+            size_t written = 0;
+            uint8_t* data_ptr = (uint8_t*)tensor->data;
+            const size_t CHUNK_SIZE = 1024;
+
+            while (written < bytes) {
+                size_t to_write = min(CHUNK_SIZE, bytes - written);
+                size_t ret = file.write(data_ptr + written, to_write);
+                if (ret != to_write) {
+                    Serial.printf("Warning: wrote %u bytes, expected %u\n", (unsigned)ret, (unsigned)to_write);
+                    Serial.println("Skipping storing parameters");
+                    return true;
+                }
+                written += ret;
+                total_bytes_written += ret;
+            }
         }
 
         if (current == model.output_layer) break;
@@ -154,11 +171,24 @@ bool MNISTModel::store_weights() {
     }
 
     file.close();
-    Serial.printf("Weights saved to %s\n", path);
+
+    // Delete existing final file if it exists
+    if (SPIFFS.exists(this->params_file_path)) {
+        if (!SPIFFS.remove(this->params_file_path)) {
+            Serial.println("Failed to remove existing final file!, Skipping storing parameters");
+            return true;
+        }
+    }
+
+    // Rename temp file -> final file
+    if (!SPIFFS.rename(tmp_path, this->params_file_path)) {
+        Serial.println("Fatal: Failed to rename temp file to final file!");
+        return false;
+    }
+
+    Serial.printf("Parameters saved to %s, total bytes written=%u\n", this->params_file_path, (unsigned)total_bytes_written);
     return true;
 }
-
-
 
 // ===== Memory handling =====
 bool MNISTModel::allocate_parameter_memory() {
@@ -232,12 +262,8 @@ bool MNISTModel::init() {
     if(!allocate_parameter_memory())
         return false;
 
-    store_weights();
-
-#if PRETRAINED_WEIGHTS
-    if(!load_weights())
+    if(!load_model_parameters())
         return false;
-#endif
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();
