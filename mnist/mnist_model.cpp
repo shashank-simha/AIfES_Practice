@@ -1,8 +1,3 @@
-#include <cstddef>
-#include "HardwareSerial.h"
-#include <stdint.h>
-#include <sys/types.h>
-#include "core/aifes_core.h"
 #include "mnist_model.h"
 
 // ===== Layers =====
@@ -47,17 +42,13 @@ bool MNISTModel::build_model() {
     layers[0] = model.input_layer = ailayer_input_f32_default(&input_layer);
     if (!model.input_layer) return false;
 
-    conv1_layer.channel_axis = 1;
-    layers[1] = ailayer_conv2d_f32_default(&conv1_layer, model.input_layer);
+    layers[1] = ailayer_conv2d_chw_f32_default(&conv1_layer, model.input_layer);
     layers[2] = ailayer_relu_f32_default(&relu1_layer, layers[1]);
-    pool1_layer.channel_axis = 1;
-    layers[3] = ailayer_maxpool2d_f32_default(&pool1_layer, layers[2]);
+    layers[3] = ailayer_maxpool2d_chw_f32_default(&pool1_layer, layers[2]);
 
-    conv2_layer.channel_axis = 1;
-    layers[4] = ailayer_conv2d_f32_default(&conv2_layer, layers[3]);
+    layers[4] = ailayer_conv2d_chw_f32_default(&conv2_layer, layers[3]);
     layers[5] = ailayer_relu_f32_default(&relu2_layer, layers[4]);
-    pool2_layer.channel_axis = 1;
-    layers[6] = ailayer_maxpool2d_f32_default(&pool2_layer, layers[5]);
+    layers[6] = ailayer_maxpool2d_chw_f32_default(&pool2_layer, layers[5]);
 
     layers[7] = ailayer_flatten_f32_default(&flatten_layer, layers[6]);
     layers[8] = ailayer_dense_f32_default(&dense1_layer, layers[7]);
@@ -115,7 +106,7 @@ bool MNISTModel::load_weights() {
 
 // ===== Store current weights and biases =====
 bool MNISTModel::store_weights() {
-    if (!SPIFFS.begin(false)) { // don't format on mount failure
+    if (!SPIFFS.begin(false)) {
         Serial.println("SPIFFS Mount Failed");
         return false;
     }
@@ -127,23 +118,48 @@ bool MNISTModel::store_weights() {
         return false;
     }
 
+    Serial.println("=== Storing weights ===");
     ailayer_t* current = model.input_layer;
+    int layer_idx = 0;
     while (current) {
+        Serial.printf("Layer %d: %s | trainable_params_count=%d\n",
+                      layer_idx,
+                      current->layer_type ? current->layer_type->name : "unknown",
+                      current->trainable_params_count);
+
         for (int p = 0; p < current->trainable_params_count; p++) {
             aitensor_t* tensor = current->trainable_params[p];
-            if (!tensor || !tensor->data) continue;
-
-            uint32_t total_elements = 1;
-            for (uint8_t d = 0; d < tensor->dim; d++) {
-                total_elements *= tensor->shape[d];
+            if (!tensor) {
+                Serial.printf("  Param %d: NULL tensor\n", p);
+                continue;
+            }
+            if (!tensor->data) {
+                Serial.printf("  Param %d: NULL data\n", p);
+                continue;
             }
 
-            // Write raw floats
-            file.write((uint8_t*)tensor->data, total_elements * sizeof(float));
+            uint32_t total_elements = 1;
+            Serial.print("  Param "); Serial.print(p); Serial.print(": shape=[");
+            for (uint8_t d = 0; d < tensor->dim; d++) {
+                total_elements *= tensor->shape[d];
+                Serial.print(tensor->shape[d]);
+                if (d < tensor->dim - 1) Serial.print(",");
+            }
+            Serial.print("] total_elements="); Serial.println(total_elements);
+
+            size_t bytes_written = file.write((uint8_t*)tensor->data, total_elements * sizeof(float));
+            if (bytes_written != total_elements * sizeof(float)) {
+                Serial.printf("  ERROR: wrote %u bytes, expected %u bytes\n",
+                              (unsigned)bytes_written,
+                              (unsigned)(total_elements * sizeof(float)));
+            } else {
+                Serial.println("  Written successfully");
+            }
         }
 
         if (current == model.output_layer) break;
         current = current->output_layer;
+        layer_idx++;
     }
 
     file.close();
@@ -223,12 +239,12 @@ bool MNISTModel::init() {
     if(!allocate_parameter_memory())
         return false;
 
+    store_weights();
+
 #if PRETRAINED_WEIGHTS
     if(!load_weights())
         return false;
 #endif
-
-    store_weights();
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();
