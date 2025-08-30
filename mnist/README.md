@@ -26,7 +26,6 @@ Key aspects:
 │ ├── train.py # Train and export model weights from Python
 ```
 
-
 ---
 
 ## 3. Model Structure
@@ -93,7 +92,54 @@ void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_
 
 ---
 
-## 5. Key Features
+## 5. Sample output from Serial terminal
+```
+15:43:44.542 -> Initializing MNISTModel...
+15:43:44.542 -> Parameter memory allocated: 208552 bytes, Free PSRAM: 8175160 bytes
+15:43:44.542 -> Loading model parameters.......
+15:43:44.704 -> Parameters loaded from /params.bin
+15:43:44.704 -> Inference memory allocated: 50176 bytes, Free PSRAM: 8123912 bytes
+15:43:44.704 -> Type 't' to test the model
+15:43:48.604 -> Training on 200 images...
+15:43:48.604 -> Training memory allocated: 507224 bytes, Free PSRAM: 7616004 bytes
+15:45:09.284 -> Epoch 1/3 - Loss: 0.2499
+15:45:09.284 -> Storing model parameters.......
+15:45:14.371 -> Parameters saved to /params.bin, total bytes written=208552
+15:46:35.050 -> Epoch 2/3 - Loss: 0.1717
+15:46:35.050 -> Storing model parameters.......
+15:46:40.358 -> Parameters saved to /params.bin, total bytes written=208552
+15:48:01.058 -> Epoch 3/3 - Loss: 0.1310
+15:48:01.058 -> Storing model parameters.......
+15:48:06.370 -> Parameters saved to /params.bin, total bytes written=208552
+15:48:06.370 -> Finished training
+15:48:06.370 -> Training memory freed, Free PSRAM: 8123912 bytes
+15:48:06.370 -> Testing 20 images...
+15:48:06.467 -> Image 0: Predicted 0, Actual 0, Correct
+15:48:06.563 -> Image 1: Predicted 0, Actual 0, Correct
+15:48:06.660 -> Image 2: Predicted 1, Actual 1, Correct
+15:48:06.757 -> Image 3: Predicted 1, Actual 1, Correct
+15:48:06.853 -> Image 4: Predicted 2, Actual 2, Correct
+15:48:06.951 -> Image 5: Predicted 2, Actual 2, Correct
+15:48:07.048 -> Image 6: Predicted 3, Actual 3, Correct
+15:48:07.143 -> Image 7: Predicted 3, Actual 3, Correct
+15:48:07.241 -> Image 8: Predicted 4, Actual 4, Correct
+15:48:07.338 -> Image 9: Predicted 4, Actual 4, Correct
+15:48:07.434 -> Image 10: Predicted 5, Actual 5, Correct
+15:48:07.531 -> Image 11: Predicted 5, Actual 5, Correct
+15:48:07.661 -> Image 12: Predicted 6, Actual 6, Correct
+15:48:07.725 -> Image 13: Predicted 6, Actual 6, Correct
+15:48:07.855 -> Image 14: Predicted 7, Actual 7, Correct
+15:48:07.951 -> Image 15: Predicted 7, Actual 7, Correct
+15:48:08.047 -> Image 16: Predicted 8, Actual 8, Correct
+15:48:08.144 -> Image 17: Predicted 8, Actual 8, Correct
+15:48:08.241 -> Image 18: Predicted 9, Actual 9, Correct
+15:48:08.339 -> Image 19: Predicted 9, Actual 9, Correct
+15:48:08.339 -> Accuracy: 20/20 (100.00%)
+```
+
+---
+
+## 6. Key Features
 - **Robust Parameter Persistence**
   - Model weights saved/loaded from `params.bin` in SPIFFS.
   - Training can resume or restart (retrain option).
@@ -101,7 +147,7 @@ void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_
   - Small MNIST subsets stored in PROGMEM for testing.
   - Python scripts for dataset generation/conversion.
 - **Clear Modular Design**
-  - Separates dataset handling, model definition, utilities, and training(host side) scripts.
+  - Separates dataset handling, model definition, utilities, and training (host side) scripts.
   - Easy to extend/adapt for other datasets.
 - **Scalable Architecture**
   - CNN model design supports minimal changes for other tasks.
@@ -109,12 +155,12 @@ void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_
 
 ---
 
-## 6. TODO
+## 7. TODO
 - **Improve dataset handling**:
   - Store and load larger datasets in binary format instead of headers.
   - Explore streaming from SD card or SPIFFS to handle full MNIST or custom datasets.
 
 - **Reduce training latency**:
-  - Current on-device training is slow (~3m40s for 200 samples).
+  - Current on-device training is slow (~1m20s for 200 samples).
   - Explore lighter architectures or hybrid training (host-assisted).
   - Optimize AIfES training loops for ESP32.
