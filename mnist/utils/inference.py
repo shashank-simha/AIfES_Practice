@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import re
+import os
 
 # -----------------------------
 # CNN model
@@ -29,83 +30,86 @@ class CNN(nn.Module):
 
 
 # -----------------------------
-# Parse C array from header file
+# Load weights from params.bin
+# -----------------------------
+def load_weights_from_bin(model, file_path="params.bin"):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"{file_path} not found")
+
+    with open(file_path, "rb") as f:
+        data = np.frombuffer(f.read(), dtype=np.float32)
+
+    # Expected tensor shapes (in AIfES save order!)
+    shapes = [
+        (8, 1, 3, 3),   # conv1.weight
+        (8,),           # conv1.bias
+        (16, 8, 3, 3),  # conv2.weight
+        (16,),          # conv2.bias
+        (64, 784),      # fc1.weight (PyTorch expects [64,784])
+        (64,),          # fc1.bias
+        (10, 64),       # fc2.weight (PyTorch expects [10,64])
+        (10,)           # fc2.bias
+    ]
+
+    idx = 0
+    tensors = []
+    for shape in shapes:
+        size = np.prod(shape)
+        arr = data[idx:idx+size].reshape(shape)
+        tensors.append(arr)
+        idx += size
+
+    # Assign tensors into model
+    model.conv1.weight.data = torch.tensor(tensors[0], dtype=torch.float32)
+    model.conv1.bias.data   = torch.tensor(tensors[1], dtype=torch.float32)
+
+    model.conv2.weight.data = torch.tensor(tensors[2], dtype=torch.float32)
+    model.conv2.bias.data   = torch.tensor(tensors[3], dtype=torch.float32)
+
+    # Linear layers: confirm orientation (AIfES might store transposed!)
+    model.fc1.weight.data   = torch.tensor(tensors[4], dtype=torch.float32)
+    model.fc1.bias.data     = torch.tensor(tensors[5], dtype=torch.float32)
+
+    model.fc2.weight.data   = torch.tensor(tensors[6], dtype=torch.float32)
+    model.fc2.bias.data     = torch.tensor(tensors[7], dtype=torch.float32)
+
+    print(f"Loaded weights from {file_path}")
+    print("conv1.weight[0,0]:", model.conv1.weight.data[0,0])
+
+
+# -----------------------------
+# Parse input & target data
 # -----------------------------
 def parse_c_array(file_path, array_name, expected_size, dtype='float'):
     with open(file_path, 'r') as f:
         content = f.read()
 
-    if dtype == 'float':
-        # Matches: const float conv1_weights[8][1][3][3] PROGMEM = { ... };
-        pattern = rf'(?:const\s+)?float\s+{array_name}\s*(?:\[[^\]]*\])*?\s*(?:PROGMEM\s*)?=\s*\{{(.*?)\}};'
-        number_regex = r'-?\d+\.\d+(?:[eE][-+]?\d+)?f?'
-    elif dtype == 'uint8':
-        # Matches: const uint8_t test_input_data[20][1][28][28] PROGMEM = { ... };
+    if dtype == 'uint8':
         pattern = rf'(?:const\s+)?uint8_t\s+{array_name}\s*(?:\[[^\]]*\])*?\s*(?:PROGMEM\s*)?=\s*\{{(.*?)\}};'
         number_regex = r'\d+'
     else:
-        raise ValueError(f"Unsupported dtype: {dtype}")
-
+        raise ValueError("Only uint8 supported here (for data).")
 
     match = re.search(pattern, content, re.DOTALL)
     if not match:
         raise ValueError(f"Array {array_name} not found in {file_path}")
 
-    array_content = match.group(1)
-    numbers = re.findall(number_regex, array_content)
-
-    if dtype == 'float':
-        values = [float(num.rstrip('f')) for num in numbers]
-    else:
-        values = [int(num) for num in numbers]
+    numbers = re.findall(number_regex, match.group(1))
+    values = [int(num) for num in numbers]
 
     if len(values) != expected_size:
-        raise ValueError(f"Expected {expected_size} values for {array_name}, got {len(values)}")
+        raise ValueError(f"Expected {expected_size}, got {len(values)}")
 
-    return np.array(values, dtype=np.float32 if dtype == 'float' else np.uint8)
-
-
-
-# -----------------------------
-# Load weights from header
-# -----------------------------
-def load_weights(model, file_path='mnist_weights.h'):
-    conv1_w = np.array(parse_c_array(file_path, 'conv1_weights', 8*1*3*3)).reshape(8,1,3,3)
-    model.conv1.weight.data = torch.tensor(conv1_w, dtype=torch.float32)
-    conv1_b = parse_c_array(file_path, 'conv1_bias', 8)
-    model.conv1.bias.data = torch.tensor(conv1_b, dtype=torch.float32)
-
-    conv2_w = np.array(parse_c_array(file_path, 'conv2_weights', 16*8*3*3)).reshape(16,8,3,3)
-    model.conv2.weight.data = torch.tensor(conv2_w, dtype=torch.float32)
-    conv2_b = parse_c_array(file_path, 'conv2_bias', 16)
-    model.conv2.bias.data = torch.tensor(conv2_b, dtype=torch.float32)
-
-    fc1_w = np.array(parse_c_array(file_path, 'fc1_weights', 784*64)).reshape(784,64).T
-    model.fc1.weight.data = torch.tensor(fc1_w, dtype=torch.float32)
-    fc1_b = parse_c_array(file_path, 'fc1_bias', 64)
-    model.fc1.bias.data = torch.tensor(fc1_b, dtype=torch.float32)
-
-    fc2_w = np.array(parse_c_array(file_path, 'fc2_weights', 64*10)).reshape(64,10).T
-    model.fc2.weight.data = torch.tensor(fc2_w, dtype=torch.float32)
-    fc2_b = parse_c_array(file_path, 'fc2_bias', 10)
-    model.fc2.bias.data = torch.tensor(fc2_b, dtype=torch.float32)
+    return np.array(values, dtype=np.uint8)
 
 
-# -----------------------------
-# Load input & target data
-# -----------------------------
 def load_data(file_path='mnist_data.h', dataset_size=None):
-    """
-    Load input and target data from C header file.
-    Input: stored as uint8 -> converted to float and normalized to [0,1]
-    Targets: stored as uint8 digits (0–9)
-    """
-    N = dataset_size if dataset_size is not None else 20  # default fallback
+    N = dataset_size if dataset_size is not None else 20
 
     # Input
     input_data_raw = parse_c_array(file_path, 'test_input_data', N*1*28*28, dtype='uint8')
     input_data = np.array(input_data_raw, dtype=np.float32).reshape(N, 1, 28, 28)
-    input_data /= 255.0  # normalize to [0,1]
+    input_data /= 255.0  # normalize
 
     # Targets
     target_data_raw = parse_c_array(file_path, 'test_target_data', N, dtype='uint8')
@@ -167,10 +171,10 @@ def inference(model, input_tensor, target_tensor, num_inputs=1, print_layers=[])
 # Main
 # -----------------------------
 if __name__ == "__main__":
-    DATASET_SIZE = None  # None → default 20, or set to custom N
+    DATASET_SIZE = None  # None → default 20
 
     model = CNN()
-    load_weights(model)
+    load_weights_from_bin(model, "params.bin")
     input_tensor, target_tensor = load_data(dataset_size=DATASET_SIZE)
 
     print_layers = ['fc2']
