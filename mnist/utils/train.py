@@ -93,12 +93,25 @@ for epoch in range(1, EPOCHS+1):
 
 # ------------------ Save parameters to binary ------------------
 def save_params_bin():
+    """
+    Save all model parameters to a binary file compatible with ESP loading.
+    Conv layers are saved as-is (C-order).
+    Fully-connected (dense) layers are transposed to match [in_features][out_features] layout.
+    """
     with open("params.bin", "wb") as f:
         for name, param in model.named_parameters():
             arr = param.detach().cpu().numpy().astype(np.float32)
-            arr.tofile(f)   # raw float32 bytes
-            print(f"Saved {name}, shape={arr.shape}, bytes={arr.nbytes}")
-    print("All weights saved to params.bin")
+
+            # Identify FC layers by shape heuristics: 2D and not 4D
+            if arr.ndim == 2:
+                arr_to_save = arr.T  # transpose for ESP [in][out]
+            else:
+                arr_to_save = arr  # conv weights keep original shape
+
+            arr_to_save.tofile(f)
+            print(f"Saved {name}, shape={arr_to_save.shape}, bytes={arr_to_save.nbytes}")
+
+    print(f"All weights saved to params.bin")
 
 if __name__ == "__main__":
     save_params_bin()

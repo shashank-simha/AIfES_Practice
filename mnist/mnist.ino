@@ -38,7 +38,7 @@ void loop() {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
             test_ds.reset();
-            // model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
+            model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
             model.test(train_ds, TRAIN_DATASET);
             model.test(test_ds, TEST_DATASET);
         }
