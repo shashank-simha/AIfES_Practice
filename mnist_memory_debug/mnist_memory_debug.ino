@@ -39,8 +39,15 @@ void loop() {
         if (cmd.indexOf("t") > -1) {
             test_ds.reset();
             // model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
+            model.load_weights_from_progmem();
             model.test(train_ds, TRAIN_DATASET);
             model.test(test_ds, TEST_DATASET);
+            model.store_params_per_layer_debug("progmem");
+
+            model.load_model_parameters();
+            model.test(train_ds, TRAIN_DATASET);
+            model.test(test_ds, TEST_DATASET);
+            model.store_params_per_layer_debug("bin");
         }
     }
 }

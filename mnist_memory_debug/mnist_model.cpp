@@ -1,5 +1,18 @@
 #include "mnist_model.h"
 
+// Generic helper: load tensor from PROGMEM into AIfES tensor
+void load_tensor_from_progmem(const float* src, aitensor_t& dst) {
+    uint32_t num_elements = 1;
+    for (uint32_t d = 0; d < dst.dim; d++) {
+        num_elements *= dst.shape[d];
+    }
+
+    float* dst_data = (float*)dst.data;
+    for (uint32_t i = 0; i < num_elements; i++) {
+        dst_data[i] = pgm_read_float(&src[i]);
+    }
+}
+
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr)
 {
@@ -132,6 +145,41 @@ bool MNISTModel::load_model_parameters() {
     return true;
 }
 
+// ===== Load pretrained weights and biases =====
+bool MNISTModel::load_weights_from_progmem() {
+    Serial.println("Loading model parameters from PROGMEM...");
+
+    // Array of PROGMEM pointers for each trainable tensor, in the same order as model layers
+    const float* src[] = {
+        (const float*)conv1_weights,
+        (const float*)conv1_bias,
+        (const float*)conv2_weights,
+        (const float*)conv2_bias,
+        (const float*)fc1_weights,
+        (const float*)fc1_bias,
+        (const float*)fc2_weights,
+        (const float*)fc2_bias
+    };
+
+    size_t tensor_index = 0;
+    ailayer_t* current = model.input_layer;
+    while (current) {
+        for (int p = 0; p < current->trainable_params_count; p++) {
+            aitensor_t* tensor = current->trainable_params[p];
+            if (!tensor || !tensor->data) continue;
+
+            load_tensor_from_progmem(src[tensor_index], *tensor);
+            tensor_index++;
+        }
+
+        if (current == model.output_layer) break;
+        current = current->output_layer;
+    }
+
+    Serial.println("Parameters loaded from PROGMEM successfully");
+    return true;
+}
+
 // ===== Store current weights and biases (chunked write + temp file + rename) =====
 bool MNISTModel::store_model_parameters() {
     Serial.println("Storing model parameters.......");
@@ -204,7 +252,7 @@ bool MNISTModel::store_model_parameters() {
     return true;
 }
 
-bool MNISTModel::store_params_per_layer_debug() {
+bool MNISTModel::store_params_per_layer_debug(const char* prefix) {
     Serial.println("Storing model parameters per layer for debug...");
 
     if (!SPIFFS.begin(false)) {
@@ -222,7 +270,7 @@ bool MNISTModel::store_params_per_layer_debug() {
 
             // Determine filename: l{layer_idx}_w.bin or l{layer_idx}_b.bin
             char filename[32];
-            sprintf(filename, "/l%d_%s.bin", layer_idx, (p==0)?"w":"b");
+            sprintf(filename, "/%s_l%d_%s.bin", prefix, layer_idx, (p==0)?"w":"b");
 
             File file = SPIFFS.open(filename, FILE_WRITE);
             if (!file) {
@@ -327,11 +375,11 @@ bool MNISTModel::init() {
     if(!allocate_parameter_memory())
         return false;
 
-    if(!load_model_parameters())
-        return false;
+    // if(!load_model_parameters())
+    //     return false;
 
-    store_params_per_layer_debug();
-    store_model_parameters();
+    // store_params_per_layer_debug();
+    // store_model_parameters();
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();

@@ -1,0 +1,126 @@
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x1180
+load:0x403c8700,len:0xc2c
+load:0x403cb700,len:0x311c
+entry 0x403c88b8
+Initializing MNISTModel...
+Parameter memory allocated: 208552 bytes, Free PSRAM: 8175160 bytes
+Inference memory allocated: 50176 bytes, Free PSRAM: 8123956 bytes
+Type 't' to test the model
+Loading model parameters from PROGMEM...
+Parameters loaded from PROGMEM successfully
+Testing 20 images...
+Image 0: Predicted 0, Actual 0, Correct
+Image 1: Predicted 0, Actual 0, Correct
+Image 2: Predicted 0, Actual 0, Correct
+Image 3: Predicted 0, Actual 0, Correct
+Image 4: Predicted 0, Actual 0, Correct
+Image 5: Predicted 0, Actual 0, Correct
+Image 6: Predicted 0, Actual 0, Correct
+Image 7: Predicted 0, Actual 0, Correct
+Image 8: Predicted 0, Actual 0, Correct
+Image 9: Predicted 2, Actual 0, Wrong
+Image 10: Predicted 0, Actual 0, Correct
+Image 11: Predicted 0, Actual 0, Correct
+Image 12: Predicted 0, Actual 0, Correct
+Image 13: Predicted 0, Actual 0, Correct
+Image 14: Predicted 0, Actual 0, Correct
+Image 15: Predicted 0, Actual 0, Correct
+Image 16: Predicted 0, Actual 0, Correct
+Image 17: Predicted 0, Actual 0, Correct
+Image 18: Predicted 0, Actual 0, Correct
+Image 19: Predicted 0, Actual 0, Correct
+Accuracy: 19/20 (95.00%)
+Testing 20 images...
+Image 0: Predicted 0, Actual 0, Correct
+Image 1: Predicted 0, Actual 0, Correct
+Image 2: Predicted 1, Actual 1, Correct
+Image 3: Predicted 1, Actual 1, Correct
+Image 4: Predicted 2, Actual 2, Correct
+Image 5: Predicted 2, Actual 2, Correct
+Image 6: Predicted 3, Actual 3, Correct
+Image 7: Predicted 3, Actual 3, Correct
+Image 8: Predicted 4, Actual 4, Correct
+Image 9: Predicted 4, Actual 4, Correct
+Image 10: Predicted 5, Actual 5, Correct
+Image 11: Predicted 5, Actual 5, Correct
+Image 12: Predicted 6, Actual 6, Correct
+Image 13: Predicted 6, Actual 6, Correct
+Image 14: Predicted 7, Actual 7, Correct
+Image 15: Predicted 7, Actual 7, Correct
+Image 16: Predicted 8, Actual 8, Correct
+Image 17: Predicted 8, Actual 8, Correct
+Image 18: Predicted 9, Actual 9, Correct
+Image 19: Predicted 9, Actual 9, Correct
+Accuracy: 20/20 (100.00%)
+Storing model parameters per layer for debug...
+Saved /progmem_l1_w.bin (288 bytes)
+Saved /progmem_l1_b.bin (32 bytes)
+Saved /progmem_l4_w.bin (4608 bytes)
+Saved /progmem_l4_b.bin (64 bytes)
+Warning: wrote 0 bytes, expected 200704 for /progmem_l8_w.bin
+Saved /progmem_l8_w.bin (200704 bytes)
+Saved /progmem_l8_b.bin (256 bytes)
+Saved /progmem_l10_w.bin (2560 bytes)
+Saved /progmem_l10_b.bin (40 bytes)
+Finished storing all layer params for debug.
+Loading model parameters.......
+Parameters loaded from /params.bin
+Testing 20 images...
+Image 0: Predicted 1, Actual 0, Wrong
+Image 1: Predicted 8, Actual 0, Wrong
+Image 2: Predicted 8, Actual 0, Wrong
+Image 3: Predicted 8, Actual 0, Wrong
+Image 4: Predicted 4, Actual 0, Wrong
+Image 5: Predicted 1, Actual 0, Wrong
+Image 6: Predicted 1, Actual 0, Wrong
+Image 7: Predicted 8, Actual 0, Wrong
+Image 8: Predicted 1, Actual 0, Wrong
+Image 9: Predicted 8, Actual 0, Wrong
+Image 10: Predicted 1, Actual 0, Wrong
+Image 11: Predicted 8, Actual 0, Wrong
+Image 12: Predicted 8, Actual 0, Wrong
+Image 13: Predicted 8, Actual 0, Wrong
+Image 14: Predicted 8, Actual 0, Wrong
+Image 15: Predicted 8, Actual 0, Wrong
+Image 16: Predicted 8, Actual 0, Wrong
+Image 17: Predicted 8, Actual 0, Wrong
+Image 18: Predicted 8, Actual 0, Wrong
+Image 19: Predicted 8, Actual 0, Wrong
+Accuracy: 0/20 (0.00%)
+Testing 20 images...
+Image 0: Predicted 4, Actual 0, Wrong
+Image 1: Predicted 8, Actual 0, Wrong
+Image 2: Predicted 1, Actual 1, Correct
+Image 3: Predicted 1, Actual 1, Correct
+Image 4: Predicted 8, Actual 2, Wrong
+Image 5: Predicted 1, Actual 2, Wrong
+Image 6: Predicted 9, Actual 3, Wrong
+Image 7: Predicted 1, Actual 3, Wrong
+Image 8: Predicted 4, Actual 4, Correct
+Image 9: Predicted 2, Actual 4, Wrong
+Image 10: Predicted 1, Actual 5, Wrong
+Image 11: Predicted 1, Actual 5, Wrong
+Image 12: Predicted 1, Actual 6, Wrong
+Image 13: Predicted 1, Actual 6, Wrong
+Image 14: Predicted 4, Actual 7, Wrong
+Image 15: Predicted 1, Actual 7, Wrong
+Image 16: Predicted 8, Actual 8, Correct
+Image 17: Predicted 8, Actual 8, Correct
+Image 18: Predicted 8, Actual 9, Wrong
+Image 19: Predicted 1, Actual 9, Wrong
+Accuracy: 5/20 (25.00%)
+Storing model parameters per layer for debug...
+Saved /bin_l1_w.bin (288 bytes)
+Saved /bin_l1_b.bin (32 bytes)
+Saved /bin_l4_w.bin (4608 bytes)
+Saved /bin_l4_b.bin (64 bytes)
+Warning: wrote 0 bytes, expected 200704 for /bin_l8_w.bin
+Saved /bin_l8_w.bin (200704 bytes)
+Saved /bin_l8_b.bin (256 bytes)
+Saved /bin_l10_w.bin (2560 bytes)
+Saved /bin_l10_b.bin (40 bytes)
+Finished storing all layer params for debug.

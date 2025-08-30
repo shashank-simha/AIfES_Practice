@@ -4,6 +4,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include "dataset.h"
+#include "mnist_weights.h"
 
 // Model constants
 #define CONV1_FILTERS 8
@@ -39,6 +40,11 @@ public:
     // Train the model
     void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch);
 
+    bool load_model_parameters();
+    bool load_weights_from_progmem();
+    bool store_model_parameters();
+    bool store_params_per_layer_debug(const char* prefix);
+
 private:
     // Model definition
     aimodel_t model;
@@ -49,9 +55,6 @@ private:
 
     // Internal helpers
     bool build_model();
-    bool load_model_parameters();
-    bool store_model_parameters();
-    bool store_params_per_layer_debug();
     bool allocate_parameter_memory();
     void free_parameter_memory();
     bool allocate_training_memory(aiopti_t *optimizer);
