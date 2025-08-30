@@ -204,6 +204,57 @@ bool MNISTModel::store_model_parameters() {
     return true;
 }
 
+bool MNISTModel::store_params_per_layer_debug() {
+    Serial.println("Storing model parameters per layer for debug...");
+
+    if (!SPIFFS.begin(false)) {
+        Serial.println("SPIFFS mount failed, skipping storing parameters");
+        return false;
+    }
+
+    ailayer_t* current = model.input_layer;
+    int layer_idx = 0;
+
+    while (current) {
+        for (int p = 0; p < current->trainable_params_count; p++) {
+            aitensor_t* tensor = current->trainable_params[p];
+            if (!tensor || !tensor->data) continue;
+
+            // Determine filename: l{layer_idx}_w.bin or l{layer_idx}_b.bin
+            char filename[32];
+            sprintf(filename, "/l%d_%s.bin", layer_idx, (p==0)?"w":"b");
+
+            File file = SPIFFS.open(filename, FILE_WRITE);
+            if (!file) {
+                Serial.printf("Failed to open %s for writing\n", filename);
+                continue;
+            }
+
+            uint32_t total_elements = 1;
+            for (uint8_t d = 0; d < tensor->dim; d++) {
+                total_elements *= tensor->shape[d];
+            }
+
+            size_t bytes = total_elements * sizeof(float);
+            size_t written = file.write((uint8_t*)tensor->data, bytes);
+            if (written != bytes) {
+                Serial.printf("Warning: wrote %u bytes, expected %u for %s\n", (unsigned)written, (unsigned)bytes, filename);
+            }
+
+            file.close();
+            Serial.printf("Saved %s (%u bytes)\n", filename, (unsigned)bytes);
+        }
+
+        if (current == model.output_layer) break;
+        current = current->output_layer;
+        layer_idx++;
+    }
+
+    Serial.println("Finished storing all layer params for debug.");
+    return true;
+}
+
+
 // ===== Memory handling =====
 bool MNISTModel::allocate_parameter_memory() {
     uint32_t size = aialgo_sizeof_parameter_memory(&model);
@@ -278,6 +329,9 @@ bool MNISTModel::init() {
 
     if(!load_model_parameters())
         return false;
+
+    store_params_per_layer_debug();
+    store_model_parameters();
 
     /* Allocate inference memory during model rather than during inference/test to avoid fragmentation */
     return allocate_inference_memory();

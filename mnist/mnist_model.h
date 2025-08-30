@@ -51,6 +51,7 @@ private:
     bool build_model();
     bool load_model_parameters();
     bool store_model_parameters();
+    bool store_params_per_layer_debug();
     bool allocate_parameter_memory();
     void free_parameter_memory();
     bool allocate_training_memory(aiopti_t *optimizer);
