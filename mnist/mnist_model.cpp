@@ -336,7 +336,7 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
 
 
 // Train dataset
-void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch) {
+void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain) {
     Serial.printf("Training on %u images...\n", num_samples);
 
     // Configure cross-entropy loss
@@ -355,8 +355,14 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         return;
     }
 
-    // Initialize model parameters + training memory
-    // aialgo_initialize_parameters_model(&this->model);
+    if (retrain)
+    {
+        // Initialize model parameters
+        Serial.println(F("Retraining the model: assiging random initial values to params"));
+        aialgo_initialize_parameters_model(&this->model);
+    }
+
+    // Allocate training memory
     if(!allocate_training_memory(optimizer))
         return;
 

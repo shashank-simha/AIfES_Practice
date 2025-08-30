@@ -11,6 +11,7 @@ SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 #define TEST_DATASET 20
 #define BATCH_SIZE 4
 #define EPOCHS 3
+#define RETRAIN false
 
 MNISTModel model;
 Dataset train_ds(train_input_data, train_target_data, TRAIN_DATASET);
@@ -38,7 +39,7 @@ void loop() {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
             test_ds.reset();
-            model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS);
+            model.train(train_ds, TRAIN_DATASET, BATCH_SIZE, EPOCHS, RETRAIN);
             model.test(train_ds, TRAIN_DATASET);
             model.test(test_ds, TEST_DATASET);
         }
