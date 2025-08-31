@@ -11,11 +11,17 @@ import numpy as np
 BATCH_SIZE = 100
 EPOCHS = 20
 NUM_CLASSES = 10
+TRAIN_SUBSET = 10000   # Use only 10k samples for training
 
 # ------------------ Load MNIST ------------------
 transform = ToTensor()
 full_train = datasets.MNIST(root="data", train=True, transform=transform, download=True)
 full_test = datasets.MNIST(root="data", train=False, transform=transform, download=True)
+
+# Subset the training data
+subset_indices = torch.randperm(len(full_train))[:TRAIN_SUBSET]
+train_data = full_train.data[subset_indices].numpy()
+train_targets = full_train.targets[subset_indices].numpy()
 
 # ------------------ Custom Dataset ------------------
 class CustomMNIST(torch.utils.data.Dataset):
@@ -33,34 +39,38 @@ class CustomMNIST(torch.utils.data.Dataset):
         label = torch.tensor(self.targets[idx], dtype=torch.long)
         return img, label
 
-train_dataset = CustomMNIST(full_train.data.numpy(), full_train.targets.numpy())
+train_dataset = CustomMNIST(train_data, train_targets)
 test_dataset = CustomMNIST(full_test.data.numpy(), full_test.targets.numpy())
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=1)
 
-# ------------------ CNN model ------------------
+# ------------------ Lightweight CNN model ------------------
 class CNN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=1)   # 1→4
         self.pool1 = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=1, padding=1)   # 4→8
         self.pool2 = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(16*7*7, 64)
-        self.fc2 = nn.Linear(64, NUM_CLASSES)
+        self.fc1 = nn.Linear(8*7*7, 32)  # smaller dense
+        self.fc2 = nn.Linear(32, NUM_CLASSES)
 
     def forward(self, x):
         x = F.relu(self.pool1(self.conv1(x)))
         x = F.relu(self.pool2(self.conv2(x)))
-        x = x.view(-1, 16*7*7)
+        x = x.view(-1, 8*7*7)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
 # ------------------ Training ------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = CNN().to(device)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# Try SGD (lighter than Adam)
+# optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
 loss_fn = nn.CrossEntropyLoss()
 
 def train(epoch):
