@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "mnist_model.h"
 
-void showProgressBar(int current, int total);
+void showProgressBar(int current, int total, const char* metric);
 
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr)
@@ -338,8 +338,10 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
         uint32_t actual = target_buffer[0];
         if (pred == actual) correct++;
 
-        if ((i * 100) / num_samples > ((i - 1) * 100) / num_samples) {
-            showProgressBar(i, num_samples);
+        Serial.printf("Image %d: Predicted %u, Actual %u, %s\n",
+                      i, pred, actual, pred == actual ? "Correct" : "Wrong");
+        if (((i+1) * 100) / num_samples > ((i) * 100) / num_samples) {
+            showProgressBar(i+1, num_samples, "Images");
         }
     }
 
@@ -433,6 +435,12 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
             float batch_loss;
             aialgo_calc_loss_model_f32(&this->model, &input_tensor, &target_tensor, &batch_loss);
             epoch_loss += batch_loss;
+
+            if (((step+1) * 100) / steps > ((step) * 100) / steps) { // first index is 0
+                char metric[32];
+                snprintf(metric, sizeof(metric), "Steps (%d/%d epoch)", epoch+1, num_epoch);
+                showProgressBar(step+1, steps, metric);
+            }
         }
 
         // Print per-epoch loss
@@ -457,7 +465,7 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
     free_training_memory();
 }
 
-void showProgressBar(int current, int total) {
+void showProgressBar(int current, int total, const char * metric) {
   int percent = (current * 100) / total;
   int barWidth = 50;  // length of the bar in characters
   int pos = (percent * barWidth) / 100;
@@ -469,5 +477,5 @@ void showProgressBar(int current, int total) {
     else Serial.print(" ");
   }
   Serial.print("] ");
-  Serial.printf("%d%% %d/%d Images...\r\n", percent, current, total);
+  Serial.printf("%d%% %d/%d %s...\r\n", percent, current, total, metric);
 }
