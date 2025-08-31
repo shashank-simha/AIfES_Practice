@@ -2,33 +2,51 @@
 
 ## 1. Description
 This project implements an **MNIST digit classifier** on the ESP32 using the [AIfES framework](https://aifes.ai/).
-It demonstrates **on-device training and inference** of a compact convolutional neural network (CNN), allowing the ESP32 to both learn and recognize handwritten digits. Training on small subset of the MNIST dataset is performed for demonstration purposes. The full training process is carried out on a host system (Python). The resulting weights are exported as **binary parameter dumps** and loaded into the ESP32 for inference.
+It demonstrates **on-device training and inference** of a compact convolutional neural network (CNN), allowing the ESP32 to both learn and recognize handwritten digits. Complete training process on a subset (10000 samples) of the MNIST dataset is performed on-device and weights are saved for further usage.
+
+The dataset (MNIST) is pre-processed into balanced chunks stored on the SD card. During runtime, the ESP32 loads these chunks into PSRAM, trains the model in batches, and can run inference directly on-device.
+
+Additionaly, training of a model with same architecture (and similar dataset count) is carried out on a host system (Python). The resulting weights are exported as **binary parameter dumps** and loaded into the ESP32 to demonstrate inference with pretrained parameters and host-assisted training.
 
 Key aspects:
 - CNN model built directly with AIfES layers
-- Training (partial) and inference performed on-device
+- Training and inference performed on-device
 - Dataset preparation and export utilities included
 - Parameter dumps for debugging and verification
 
 ---
 
-## 2. Folder Structure
+## 2. Requirements
+- **Hardware (tested on ESP32-S3)**
+  - ESP32-S3 module with:
+    - **8MB Flash** (with **SPIFFS** enabled in the partition scheme)
+    - **8MB PSRAM**
+    - Onboard or external **SD card slot**
+  - **Minimum Hardware (sufficient to run as-is)**
+    - **4MB** Flash (with SPIFFS enabled)
+    - **4MB PSRAM**
+    - **SD card** with ~20MB free space
+  - **Notes**
+    - The SD card is used to store dataset chunks and model parameters.
+    - PSRAM is required for batch buffers, training data, and model weights.
+    - The example can be ported with **minimal changes** to boards with different memory configurations or to projects using alternative storage/streaming strategies.
+
+## 3. Folder Structure
 ```
 ├── dataset.cpp # Dataset loading and interface
 ├── dataset.h
-├── mnist_data.h # Small MNIST dataset stored in PROGMEM
 ├── mnist.ino # Arduino sketch (main entry for ESP32)
 ├── mnist_model.cpp # CNN model implementation in AIfES
 ├── mnist_model.h
 ├── params.bin # Binary dump of trained parameters
 ├── utils/
-│ ├── generate_dataset.py # Convert MNIST data into C header format
+│ ├── generate_dataset.py # Convert MNIST data into binary chunks
 │ ├── train.py # Train and export model weights from Python
 ```
 
 ---
 
-## 3. Model Structure
+## 4. Model Structure
 The neural network follows a **compact CNN architecture** optimized for embedded systems.
 Below is the layer-by-layer structure with shapes and parameters:
 
@@ -52,7 +70,36 @@ Below is the layer-by-layer structure with shapes and parameters:
 
 ---
 
-## 4. Usage
+## 5. Usage
+
+### Dataset Preparation
+The MNIST dataset is divided into **balanced chunks** to ensure fair representation of classes in each split.
+
+- Each **training chunk** contains **2000 images** (and corresponding labels).
+- Each **test chunk** contains **2000 images**.
+- Images and labels are stored in **raw `uint8` binary format** (`.bin` files).
+- For this example, **5 training chunks** (10,000 images) and **1 test chunk** (2,000 images) are copied to the SD card.
+- The dataset chunks are generated using the script:
+  ```bash
+  python utils/generate_dataset.py
+  ```
+- On the ESP32, datasets are initialized in code as:
+  ```cpp
+  #define NUM_TRAIN_CHUNKS 5
+  #define NUM_IMAGES_PER_TRAIN_CHUNK 2000
+  #define NUM_TEST_CHUNKS 1
+  #define NUM_IMAGES_PER_TEST_CHUNK 2000
+
+  const char* train_image_files[] = {"/mnist_chunks/train_images_chunk0.bin", "/mnist_chunks/train_images_chunk1.bin", "/mnist_chunks/train_images_chunk2.bin", "/mnist_chunks/train_images_chunk3.bin", "/mnist_chunks/train_images_chunk4.bin"};
+  const char* train_label_files[] = {"/mnist_chunks/train_labels_chunk0.bin", "/mnist_chunks/train_labels_chunk1.bin", "/mnist_chunks/train_labels_chunk2.bin", "/mnist_chunks/train_labels_chunk3.bin", "/mnist_chunks/train_labels_chunk4.bin"};
+  const char* test_image_files[] = {"/mnist_chunks/test_images_chunk0.bin"};
+  const char* test_label_files[] = {"/mnist_chunks/test_labels_chunk0.bin",};
+
+  ...
+
+  train_ds = new Dataset(train_image_files, train_label_files, NUM_TRAIN_CHUNKS);
+  test_ds  = new Dataset(test_image_files,  test_label_files,  NUM_TEST_CHUNKS);
+  ```
 
 ### Model API
 The model provides a straightforward API for initialization, inference, testing, and training.
@@ -82,88 +129,84 @@ void test(Dataset& ds, uint32_t num_samples);
 
 #### Train Model
 ```cpp
-void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain);
+void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain, bool early_stopping, float_t early_stopping_target_loss);
 ```
 - Trains model on dataset (`ds`).
 - If `retrain == true`, reinitializes model parameters.
 - Saves updated weights to `params.bin` in SPIFFS after each epoch.
+- Early exits if required target loss is achieved
 
 **⚡ Note:**
-- Use `utils/generate_dataset.py` to generate a small subset of MNIST dataset. Script generates `mnist_data.h`.
 - Use `utils/train.py` to generate pretrained `params.bin`.
-- Upload `params.bin` to ESP32 flash memory using `SPIFFS_Server` Arduino sketch for validating with pretrained parameters.
+- For validating with pretrained parameters:
+  - Upload `params.bin` to ESP32 flash memory using `SPIFFS_Server` Arduino sketch (in root folder)
+  - Upload the `mnist.ino` again. The program should load the model parameters from `params.bin` in flash
 
 ---
 
-## 5. Sample output from Serial terminal
+## 6. Sample output from Serial terminal
 ```
-07:57:26.697 -> Initializing MNISTModel...
-07:57:26.697 -> Parameter memory allocated: 52968 bytes, Free PSRAM: 8330808 bytes
-07:57:26.697 -> Loading model parameters.......
-07:57:26.826 -> Parameters loaded from /params.bin
-07:57:26.826 -> Inference memory allocated: 25088 bytes, Free PSRAM: 8305160 bytes
-07:57:26.826 -> Type 't' to test the model
-07:57:32.418 -> Training on 200 images...
-07:57:32.418 -> Training memory allocated: 153816 bytes, Free PSRAM: 8149508 bytes
-07:57:57.214 -> Epoch 1/3 - Loss: 0.3916
-07:57:57.214 -> Storing model parameters.......
-07:57:58.730 -> Parameters saved to /params.bin, total bytes written=52968
-07:58:23.538 -> Epoch 2/3 - Loss: 0.3087
-07:58:23.538 -> Storing model parameters.......
-07:58:24.965 -> Parameters saved to /params.bin, total bytes written=52968
-07:58:49.746 -> Epoch 3/3 - Loss: 0.2574
-07:58:49.746 -> Storing model parameters.......
-07:58:51.195 -> Parameters saved to /params.bin, total bytes written=52968
-07:58:51.195 -> Finished training
-07:58:51.195 -> Training memory freed, Free PSRAM: 8305160 bytes
-07:58:51.195 -> Testing 20 images...
-07:58:51.227 -> Image 0: Predicted 0, Actual 0, Correct
-07:58:51.259 -> Image 1: Predicted 0, Actual 0, Correct
-07:58:51.291 -> Image 2: Predicted 1, Actual 1, Correct
-07:58:51.323 -> Image 3: Predicted 1, Actual 1, Correct
-07:58:51.355 -> Image 4: Predicted 2, Actual 2, Correct
-07:58:51.386 -> Image 5: Predicted 2, Actual 2, Correct
-07:58:51.419 -> Image 6: Predicted 3, Actual 3, Correct
-07:58:51.451 -> Image 7: Predicted 3, Actual 3, Correct
-07:58:51.482 -> Image 8: Predicted 4, Actual 4, Correct
-07:58:51.482 -> Image 9: Predicted 4, Actual 4, Correct
-07:58:51.515 -> Image 10: Predicted 5, Actual 5, Correct
-07:58:51.547 -> Image 11: Predicted 5, Actual 5, Correct
-07:58:51.579 -> Image 12: Predicted 6, Actual 6, Correct
-07:58:51.612 -> Image 13: Predicted 6, Actual 6, Correct
-07:58:51.644 -> Image 14: Predicted 7, Actual 7, Correct
-07:58:51.676 -> Image 15: Predicted 7, Actual 7, Correct
-07:58:51.708 -> Image 16: Predicted 8, Actual 8, Correct
-07:58:51.740 -> Image 17: Predicted 8, Actual 8, Correct
-07:58:51.773 -> Image 18: Predicted 9, Actual 9, Correct
-07:58:51.807 -> Image 19: Predicted 9, Actual 9, Correct
-07:58:51.807 -> Accuracy: 20/20 (100.00%)
+[2025-08-31 21:10:31.889] Initializing MNISTModel...
+[2025-08-31 21:10:31.890] Parameter memory allocated: 52968 bytes, Free PSRAM: 5151252 bytes
+[2025-08-31 21:10:31.895] Loading model parameters.......
+[2025-08-31 21:10:32.015] Inference memory allocated: 25088 bytes, Free PSRAM: 5125604 bytes
+[2025-08-31 21:10:32.022] Type 't' to train and test the model
+[2025-08-31 21:10:45.930] Loaded image chunk 0 with 2000 samples
+[2025-08-31 21:10:45.944] Loaded label chunk 0 with 2000 labels
+[2025-08-31 21:10:45.945] Training on 10000 images...
+[2025-08-31 21:10:45.947] Retraining the model: assiging random initial values to params
+[2025-08-31 21:10:45.953] Training memory allocated: 153816 bytes, Free PSRAM: 4969952 bytes
+[2025-08-31 21:14:48.947] Progress: [==========>                                       ] 20% 20/100 Steps (1/5 epoch)...
+[2025-08-31 21:14:49.716] Loaded image chunk 1 with 2000 samples
+[2025-08-31 21:14:49.724] Loaded label chunk 1 with 2000 labels
+[2025-08-31 21:18:52.728] Progress: [====================>                             ] 40% 40/100 Steps (1/5 epoch)...
+[2025-08-31 21:18:53.494] Loaded image chunk 2 with 2000 samples
+[2025-08-31 21:18:53.502] Loaded label chunk 2 with 2000 labels
+...
+[2025-08-31 21:31:04.054] Progress: [==================================================] 100% 100/100 Steps (1/5 epoch)...
+[2025-08-31 21:31:04.072] Epoch 1/5 - Loss: 91.5105
+[2025-08-31 21:31:04.077] Storing model parameters.......
+[2025-08-31 21:31:05.320] Parameters saved to /params.bin, total bytes written=52968
+[2025-08-31 21:31:06.089] Loaded image chunk 0 with 2000 samples
+[2025-08-31 21:31:06.097] Loaded label chunk 0 with 2000 labels
+...
+[2025-08-31 22:52:24.912] Progress: [==================================================] 100% 100/100 Steps (5/5 epoch)...
+[2025-08-31 22:52:24.924] Epoch 5/5 - Loss: 7.2545
+[2025-08-31 22:52:24.927] Storing model parameters.......
+[2025-08-31 22:52:26.247] Parameters saved to /params.bin, total bytes written=52968
+[2025-08-31 22:52:26.255] Finished training
+[2025-08-31 22:52:26.255] Training memory freed, Free PSRAM: 5125604 bytes
+[2025-08-31 22:52:27.007] Loaded image chunk 0 with 2000 samples
+[2025-08-31 22:52:27.015] Loaded label chunk 0 with 2000 labels
+[2025-08-31 22:52:27.017] Testing 2000 images...
+[2025-08-31 22:53:32.289] Progress: [==================================================] 100% 2000/2000 Images...
+[2025-08-31 22:53:32.294] Accuracy: 1910/2000 (95.50%)
 ```
 
 ---
 
-## 6. Key Features
+## 7. Key Features
 - **Robust Parameter Persistence**
   - Model weights saved/loaded from `params.bin` in SPIFFS.
   - Training can resume or restart (retrain option).
-- **Dataset Handling**
-  - Small MNIST subsets stored in PROGMEM for testing.
-  - Python scripts for dataset generation/conversion.
+- **Flexible Dataset Handling**
+  - Dataset class manages **chunked loading from SD card**, automatically swapping chunks in and out of PSRAM.
+  - Model only requests the *next batch* — it does not depend on how the dataset is managed.
+  - This means the `Dataset` implementation can be swapped or modified (e.g., streaming, compressed storage, alternative datasets) **without changing model code**.
+- **On-Device Training & Inference**
+  - Entire training and evaluation run directly on the ESP32-S3.
+  - Host-side training utilities are optional, useful for debugging or preprocessing but **not required**.
 - **Clear Modular Design**
-  - Separates dataset handling, model definition, utilities, and training (host side) scripts.
-  - Easy to extend/adapt for other datasets.
+  - Separation of concerns: dataset handling, model definition, utilities, and optional host-side scripts.
+  - Easy to extend/adapt for other datasets and training strategies with minimal code changes.
 - **Scalable Architecture**
   - CNN model design supports minimal changes for other tasks.
   - Binary parameter handling simplifies model porting/updates.
 
 ---
 
-## 7. TODO
-- **Improve dataset handling**:
-  - Store and load larger datasets in binary format instead of headers.
-  - Explore streaming from SD card or SPIFFS to handle full MNIST or custom datasets.
-
+## 8. TODO
 - **Reduce training latency**:
-  - Current on-device training is slow (~25s per epoch for 200 samples).
+  - Current on-device training is slow (~1h45m for 10000 training samples over 5 epochs).
   - Explore lighter architectures or hybrid training (host-assisted).
   - Optimize AIfES training loops for ESP32.
