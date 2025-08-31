@@ -311,7 +311,6 @@ uint32_t MNISTModel::infer(float* input_buffer) {
 void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
     Serial.printf("Testing %u images...\n", num_samples);
 
-    Serial.printf("Allocating memory to buffers: Free PSRAM: %u bytes\n", ESP.getFreePsram());
     uint8_t* input_buffer = (uint8_t*)ps_malloc(1 * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(uint8_t));
     uint8_t* target_buffer = (uint8_t*)ps_malloc(sizeof(uint8_t));
     float* input_normalized_buffer = (float*)ps_malloc(1 * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
@@ -322,7 +321,6 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
         if (input_normalized_buffer) free(input_normalized_buffer);
         return;
     }
-    Serial.printf("Memory allocated to buffers: Free PSRAM: %u bytes\n", ESP.getFreePsram());
 
     uint32_t correct = 0;
     for (uint32_t i = 0; i < num_samples; i++) {
@@ -381,7 +379,6 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         return;
 
     // Allocate input/target buffers for one batch
-    Serial.printf("Allocating memory to buffers: Free PSRAM: %u bytes\n", ESP.getFreePsram());
     uint8_t* input_buffer = (uint8_t*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(uint8_t));
     uint8_t* target_buffer = (uint8_t*)ps_malloc(batch_size * sizeof(uint8_t));
     float* input_normalized_buffer = (float*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
@@ -395,7 +392,6 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         free_training_memory();
         return;
     }
-    Serial.printf("Memory allocated to buffers: Free PSRAM: %u bytes\n", ESP.getFreePsram());
 
     // Training loop
     for (uint32_t epoch = 0; epoch < num_epoch; epoch++) {

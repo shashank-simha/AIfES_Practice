@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma once
 #include <Arduino.h>
 
@@ -47,4 +48,6 @@ private:
     const char** image_files;
     const char** label_files;
     uint32_t total_chunks;
+    uint32_t max_image_chunk_size;
+    uint32_t max_label_chunk_size;
 };

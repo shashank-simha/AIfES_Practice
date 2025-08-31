@@ -11,15 +11,36 @@
 Dataset::Dataset(const char* image_files[], uint32_t num_chunks)
     : image_files(image_files), label_files(nullptr),
       total_chunks(num_chunks), current_chunk(0), cursor(0),
-      dataset_size(0), input_data_psram(nullptr), target_data_psram(nullptr) {
+      dataset_size(0), input_data_psram(nullptr), target_data_psram(nullptr),
+      max_image_chunk_size(0), max_label_chunk_size(0) {
 
     if (total_chunks == 0) {
         Serial.println("Error: No image chunks provided.");
         while (1) {}
     }
 
-    // Allocate PSRAM buffer for input (we will resize after reading first chunk)
-    input_data_psram = (uint8_t*)ps_malloc(INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * 1024); // temp size
+    // -------- Pre-scan chunks --------
+    for (uint32_t i = 0; i < total_chunks; i++) {
+        File f = SD_MMC.open(image_files[i], FILE_READ);
+        if (!f) {
+            Serial.printf("Error: Failed to open image chunk %s\n", image_files[i]);
+            while (1) {}
+        }
+        size_t img_size = f.size();
+        f.close();
+
+        if (img_size % (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH) != 0) {
+            Serial.printf("Error: Image chunk %s size not multiple of image dimension\n", image_files[i]);
+            while (1) {}
+        }
+
+        if (img_size > max_image_chunk_size) {
+            max_image_chunk_size = img_size;
+        }
+    }
+
+    // Allocate PSRAM for input once (largest possible chunk)
+    input_data_psram = (uint8_t*)ps_malloc(max_image_chunk_size);
     if (!input_data_psram) {
         Serial.println("Error: Failed to allocate PSRAM for input.");
         while (1) {}
@@ -38,7 +59,8 @@ Dataset::Dataset(const char* image_files[], uint32_t num_chunks)
 Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t num_chunks)
     : image_files(image_files), label_files(label_files),
       total_chunks(num_chunks), current_chunk(0), cursor(0),
-      dataset_size(0), input_data_psram(nullptr), target_data_psram(nullptr) {
+      dataset_size(0), input_data_psram(nullptr), target_data_psram(nullptr),
+      max_image_chunk_size(0), max_label_chunk_size(0) {
 
     if (total_chunks == 0) {
         Serial.println("Error: No image chunks provided.");
@@ -50,9 +72,49 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
         while (1) {}
     }
 
-    // Allocate PSRAM buffers
-    input_data_psram = (uint8_t*)ps_malloc(INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * 1024); // temp size
-    target_data_psram = (uint8_t*)ps_malloc(1024); // temp size
+    // -------- Pre-scan chunks --------
+    for (uint32_t i = 0; i < total_chunks; i++) {
+        // Scan image chunk
+        File f = SD_MMC.open(image_files[i], FILE_READ);
+        if (!f) {
+            Serial.printf("Error: Failed to open image chunk %s\n", image_files[i]);
+            while (1) {}
+        }
+        size_t img_size = f.size();
+        f.close();
+
+        if (img_size % (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH) != 0) {
+            Serial.printf("Error: Image chunk %s size not multiple of image dimension\n", image_files[i]);
+            while (1) {}
+        }
+        if (img_size > max_image_chunk_size) {
+            max_image_chunk_size = img_size;
+        }
+
+        uint32_t num_images = img_size / (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH);
+
+        // Scan label chunk
+        File lf = SD_MMC.open(label_files[i], FILE_READ);
+        if (!lf) {
+            Serial.printf("Error: Failed to open label chunk %s\n", label_files[i]);
+            while (1) {}
+        }
+        size_t lbl_size = lf.size();
+        lf.close();
+
+        if (lbl_size != num_images) {
+            Serial.printf("Error: Label count %u does not match image count %u in chunk %u\n",
+                          lbl_size, num_images, i);
+            while (1) {}
+        }
+        if (lbl_size > max_label_chunk_size) {
+            max_label_chunk_size = lbl_size;
+        }
+    }
+
+    // Allocate PSRAM for inputs and labels once (largest possible chunks)
+    input_data_psram = (uint8_t*)ps_malloc(max_image_chunk_size);
+    target_data_psram = (uint8_t*)ps_malloc(max_label_chunk_size);
     if (!input_data_psram || !target_data_psram) {
         Serial.println("Error: Failed to allocate PSRAM for input/target.");
         while (1) {}
@@ -90,27 +152,10 @@ bool Dataset::load_chunk(uint32_t chunk_idx) {
         return false;
     }
     size_t img_size = f.size();
-    if (img_size % (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH) != 0) {
-        Serial.printf("Error: Image chunk %s size not multiple of image dimension\n", image_files[chunk_idx]);
-        f.close();
-        return false;
-    }
-
-    dataset_size = img_size / (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH);
-
-    // Reallocate input PSRAM if needed
-    if (img_size > f.size()) {
-        free(input_data_psram);
-        input_data_psram = (uint8_t*)ps_malloc(img_size);
-        if (!input_data_psram) {
-            Serial.println("Error: Failed to allocate PSRAM for input chunk.");
-            f.close();
-            return false;
-        }
-    }
-
     f.read(input_data_psram, img_size);
     f.close();
+
+    dataset_size = img_size / (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH);
     Serial.printf("Loaded image chunk %u with %u samples\n", chunk_idx, dataset_size);
 
     // Read label file if present
@@ -121,23 +166,6 @@ bool Dataset::load_chunk(uint32_t chunk_idx) {
             return false;
         }
         size_t lbl_size = lf.size();
-        if (lbl_size != dataset_size) {
-            Serial.printf("Error: Label count %u does not match image count %u in chunk %u\n", lbl_size, dataset_size, chunk_idx);
-            lf.close();
-            return false;
-        }
-
-        // Reallocate label PSRAM if needed
-        if (lbl_size > lf.size()) {
-            free(target_data_psram);
-            target_data_psram = (uint8_t*)ps_malloc(lbl_size);
-            if (!target_data_psram) {
-                Serial.println("Error: Failed to allocate PSRAM for labels.");
-                lf.close();
-                return false;
-            }
-        }
-
         lf.read(target_data_psram, lbl_size);
         lf.close();
         Serial.printf("Loaded label chunk %u with %u labels\n", chunk_idx, dataset_size);
