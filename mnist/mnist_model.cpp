@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include "mnist_model.h"
 
+void showProgressBar(int current, int total);
+
 // ===== Constructor / Destructor =====
 MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), inference_memory(nullptr)
 {
@@ -335,8 +337,10 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
         uint32_t pred = infer(input_normalized_buffer);
         uint32_t actual = target_buffer[0];
         if (pred == actual) correct++;
-        Serial.printf("Image %d: Predicted %u, Actual %u, %s\n",
-                      i, pred, actual, pred == actual ? "Correct" : "Wrong");
+
+        if ((i * 100) / num_samples > ((i - 1) * 100) / num_samples) {
+            showProgressBar(i, num_samples);
+        }
     }
 
     float acc = 100.0f * correct / num_samples;
@@ -451,4 +455,19 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
     free(input_normalized_buffer);
     free(target_onehot_buffer);
     free_training_memory();
+}
+
+void showProgressBar(int current, int total) {
+  int percent = (current * 100) / total;
+  int barWidth = 50;  // length of the bar in characters
+  int pos = (percent * barWidth) / 100;
+
+  Serial.print("Progress: [");
+  for (int i = 0; i < barWidth; i++) {
+    if (i < pos) Serial.print("=");
+    else if (i == pos) Serial.print(">");
+    else Serial.print(" ");
+  }
+  Serial.print("] ");
+  Serial.printf("%d%% %d/%d Images...\r\n", percent, current, total);
 }

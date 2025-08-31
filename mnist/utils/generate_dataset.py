@@ -5,8 +5,8 @@ import os
 
 # ------------------ Config ------------------
 NUM_CLASSES = 10
-CHUNK_SIZE_TRAIN = 100   # Target images per chunk
-CHUNK_SIZE_TEST = 100    # Target images per chunk
+CHUNK_SIZE_TRAIN = 1000   # Target images per chunk
+CHUNK_SIZE_TEST = 2000    # Target images per chunk
 OUTPUT_DIR = "mnist_chunks"
 
 # ------------------ Load MNIST ------------------
