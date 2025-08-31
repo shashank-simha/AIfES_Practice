@@ -35,17 +35,20 @@ Below is the layer-by-layer structure with shapes and parameters:
 | #  | Layer      | Details / Parameters                           | Output Shape        |
 |----|------------|-----------------------------------------------|---------------------|
 | 1  | **Input**  | Shape: `[1, 1, 28, 28]`                       | `[1, 1, 28, 28]`    |
-| 2  | **Conv2D** | Filters: 8, Kernel: (3×3), Stride: (1,1), Padding: (1,1) | `[1, 8, 28, 28]` |
-| 3  | **ReLU**   | Activation                                    | `[1, 8, 28, 28]`    |
-| 4  | **MaxPool**| Pool: (2×2), Stride: (2,2)                    | `[1, 8, 14, 14]`    |
-| 5  | **Conv2D** | Filters: 16, Kernel: (3×3), Stride: (1,1), Padding: (1,1) | `[1, 16, 14, 14]` |
-| 6  | **ReLU**   | Activation                                    | `[1, 16, 14, 14]`   |
-| 7  | **MaxPool**| Pool: (2×2), Stride: (2,2)                    | `[1, 16, 7, 7]`     |
-| 8  | **Flatten**| Reshape                                       | `[1, 784]`          |
-| 9  | **Dense**  | Neurons: 64                                   | `[1, 64]`           |
-| 10 | **ReLU**   | Activation                                    | `[1, 64]`           |
+| 2  | **Conv2D** | Filters: 4, Kernel: (3×3), Stride: (1,1), Padding: (1,1), Dilation: (1,1) | `[1, 4, 28, 28]` |
+| 3  | **ReLU**   | Activation                                    | `[1, 4, 28, 28]`    |
+| 4  | **MaxPool**| Pool: (2×2), Stride: (2,2), Padding: (0, 0)   | `[1, 4, 14, 14]`    |
+| 5  | **Conv2D** | Filters: 8, Kernel: (3×3), Stride: (1,1), Padding: (1,1), Dilation: (1,1) | `[1, 8, 14, 14]` |
+| 6  | **ReLU**   | Activation                                    | `[1, 8, 14, 14]`   |
+| 7  | **MaxPool**| Pool: (2×2), Stride: (2,2), Padding: (0, 0)   | `[1, 8, 7, 7]`     |
+| 8  | **Flatten**| Reshape                                       | `[1, 392]`          |
+| 9  | **Dense**  | Neurons: 64                                   | `[1, 32]`           |
+| 10 | **ReLU**   | Activation                                    | `[1, 32]`           |
 | 11 | **Dense**  | Neurons: 10                                   | `[1, 10]`           |
 | 12 | **Softmax**| Classification output                         | `[1, 10]`           |
+
+**Note:**
+- All Convolution and Maxpool layers use NCHW (Channel axis: 1) ordering.
 
 ---
 
@@ -94,47 +97,47 @@ void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_
 
 ## 5. Sample output from Serial terminal
 ```
-15:43:44.542 -> Initializing MNISTModel...
-15:43:44.542 -> Parameter memory allocated: 208552 bytes, Free PSRAM: 8175160 bytes
-15:43:44.542 -> Loading model parameters.......
-15:43:44.704 -> Parameters loaded from /params.bin
-15:43:44.704 -> Inference memory allocated: 50176 bytes, Free PSRAM: 8123912 bytes
-15:43:44.704 -> Type 't' to test the model
-15:43:48.604 -> Training on 200 images...
-15:43:48.604 -> Training memory allocated: 507224 bytes, Free PSRAM: 7616004 bytes
-15:45:09.284 -> Epoch 1/3 - Loss: 0.2499
-15:45:09.284 -> Storing model parameters.......
-15:45:14.371 -> Parameters saved to /params.bin, total bytes written=208552
-15:46:35.050 -> Epoch 2/3 - Loss: 0.1717
-15:46:35.050 -> Storing model parameters.......
-15:46:40.358 -> Parameters saved to /params.bin, total bytes written=208552
-15:48:01.058 -> Epoch 3/3 - Loss: 0.1310
-15:48:01.058 -> Storing model parameters.......
-15:48:06.370 -> Parameters saved to /params.bin, total bytes written=208552
-15:48:06.370 -> Finished training
-15:48:06.370 -> Training memory freed, Free PSRAM: 8123912 bytes
-15:48:06.370 -> Testing 20 images...
-15:48:06.467 -> Image 0: Predicted 0, Actual 0, Correct
-15:48:06.563 -> Image 1: Predicted 0, Actual 0, Correct
-15:48:06.660 -> Image 2: Predicted 1, Actual 1, Correct
-15:48:06.757 -> Image 3: Predicted 1, Actual 1, Correct
-15:48:06.853 -> Image 4: Predicted 2, Actual 2, Correct
-15:48:06.951 -> Image 5: Predicted 2, Actual 2, Correct
-15:48:07.048 -> Image 6: Predicted 3, Actual 3, Correct
-15:48:07.143 -> Image 7: Predicted 3, Actual 3, Correct
-15:48:07.241 -> Image 8: Predicted 4, Actual 4, Correct
-15:48:07.338 -> Image 9: Predicted 4, Actual 4, Correct
-15:48:07.434 -> Image 10: Predicted 5, Actual 5, Correct
-15:48:07.531 -> Image 11: Predicted 5, Actual 5, Correct
-15:48:07.661 -> Image 12: Predicted 6, Actual 6, Correct
-15:48:07.725 -> Image 13: Predicted 6, Actual 6, Correct
-15:48:07.855 -> Image 14: Predicted 7, Actual 7, Correct
-15:48:07.951 -> Image 15: Predicted 7, Actual 7, Correct
-15:48:08.047 -> Image 16: Predicted 8, Actual 8, Correct
-15:48:08.144 -> Image 17: Predicted 8, Actual 8, Correct
-15:48:08.241 -> Image 18: Predicted 9, Actual 9, Correct
-15:48:08.339 -> Image 19: Predicted 9, Actual 9, Correct
-15:48:08.339 -> Accuracy: 20/20 (100.00%)
+07:57:26.697 -> Initializing MNISTModel...
+07:57:26.697 -> Parameter memory allocated: 52968 bytes, Free PSRAM: 8330808 bytes
+07:57:26.697 -> Loading model parameters.......
+07:57:26.826 -> Parameters loaded from /params.bin
+07:57:26.826 -> Inference memory allocated: 25088 bytes, Free PSRAM: 8305160 bytes
+07:57:26.826 -> Type 't' to test the model
+07:57:32.418 -> Training on 200 images...
+07:57:32.418 -> Training memory allocated: 153816 bytes, Free PSRAM: 8149508 bytes
+07:57:57.214 -> Epoch 1/3 - Loss: 0.3916
+07:57:57.214 -> Storing model parameters.......
+07:57:58.730 -> Parameters saved to /params.bin, total bytes written=52968
+07:58:23.538 -> Epoch 2/3 - Loss: 0.3087
+07:58:23.538 -> Storing model parameters.......
+07:58:24.965 -> Parameters saved to /params.bin, total bytes written=52968
+07:58:49.746 -> Epoch 3/3 - Loss: 0.2574
+07:58:49.746 -> Storing model parameters.......
+07:58:51.195 -> Parameters saved to /params.bin, total bytes written=52968
+07:58:51.195 -> Finished training
+07:58:51.195 -> Training memory freed, Free PSRAM: 8305160 bytes
+07:58:51.195 -> Testing 20 images...
+07:58:51.227 -> Image 0: Predicted 0, Actual 0, Correct
+07:58:51.259 -> Image 1: Predicted 0, Actual 0, Correct
+07:58:51.291 -> Image 2: Predicted 1, Actual 1, Correct
+07:58:51.323 -> Image 3: Predicted 1, Actual 1, Correct
+07:58:51.355 -> Image 4: Predicted 2, Actual 2, Correct
+07:58:51.386 -> Image 5: Predicted 2, Actual 2, Correct
+07:58:51.419 -> Image 6: Predicted 3, Actual 3, Correct
+07:58:51.451 -> Image 7: Predicted 3, Actual 3, Correct
+07:58:51.482 -> Image 8: Predicted 4, Actual 4, Correct
+07:58:51.482 -> Image 9: Predicted 4, Actual 4, Correct
+07:58:51.515 -> Image 10: Predicted 5, Actual 5, Correct
+07:58:51.547 -> Image 11: Predicted 5, Actual 5, Correct
+07:58:51.579 -> Image 12: Predicted 6, Actual 6, Correct
+07:58:51.612 -> Image 13: Predicted 6, Actual 6, Correct
+07:58:51.644 -> Image 14: Predicted 7, Actual 7, Correct
+07:58:51.676 -> Image 15: Predicted 7, Actual 7, Correct
+07:58:51.708 -> Image 16: Predicted 8, Actual 8, Correct
+07:58:51.740 -> Image 17: Predicted 8, Actual 8, Correct
+07:58:51.773 -> Image 18: Predicted 9, Actual 9, Correct
+07:58:51.807 -> Image 19: Predicted 9, Actual 9, Correct
+07:58:51.807 -> Accuracy: 20/20 (100.00%)
 ```
 
 ---
@@ -161,6 +164,6 @@ void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_
   - Explore streaming from SD card or SPIFFS to handle full MNIST or custom datasets.
 
 - **Reduce training latency**:
-  - Current on-device training is slow (~1m20s for 200 samples).
+  - Current on-device training is slow (~25s per epoch for 200 samples).
   - Explore lighter architectures or hybrid training (host-assisted).
   - Optimize AIfES training loops for ESP32.

@@ -6,8 +6,8 @@
 #include "dataset.h"
 
 // Model constants
-#define CONV1_FILTERS 8
-#define CONV2_FILTERS 16
+#define CONV1_FILTERS 4
+#define CONV2_FILTERS 8
 #define KERNEL_SIZE {3, 3}
 #define STRIDE {1, 1}
 #define PADDING {1, 1}
@@ -15,7 +15,7 @@
 #define POOL_SIZE {2, 2}
 #define POOL_STRIDE {2, 2}
 #define POOL_PADDING {0, 0}
-#define DENSE1_SIZE 64
+#define DENSE1_SIZE 32
 #define OUTPUT_SIZE 10
 
 // ==========================
