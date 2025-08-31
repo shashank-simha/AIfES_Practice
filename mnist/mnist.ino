@@ -19,6 +19,8 @@ SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 #define BATCH_SIZE 4
 #define EPOCHS 3
 #define RETRAIN false
+#define EARLY_STOPPING true
+#define EARLY_STOPPING_TARGET_LOSS 0.095
 
 const char* train_image_files[] = {"/mnist_chunks/train_images_chunk0.bin", "/mnist_chunks/train_images_chunk1.bin"};
 const char* train_label_files[] = {"/mnist_chunks/train_labels_chunk0.bin", "/mnist_chunks/train_labels_chunk1.bin"};
@@ -67,7 +69,7 @@ void loop() {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
             train_ds->reset();
-            model.train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN);
+            model.train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
             test_ds->reset();
             model.test(*test_ds, NUM_TEST_CHUNKS * NUM_IMAGES_PER_TEST_CHUNK);
         }

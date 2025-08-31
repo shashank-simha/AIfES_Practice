@@ -37,7 +37,7 @@ public:
     void test(Dataset& ds, uint32_t num_samples);
 
     // Train the model
-    void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain);
+    void train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain, bool early_stopping, float_t early_stopping_target_loss);
 
 private:
     // Model definition

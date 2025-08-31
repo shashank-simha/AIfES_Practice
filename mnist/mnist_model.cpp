@@ -1,3 +1,4 @@
+#include <cmath>
 #include <stdint.h>
 #include "mnist_model.h"
 
@@ -348,7 +349,7 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
 
 
 // Train dataset
-void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain) {
+void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, uint32_t num_epoch, bool retrain, bool early_stopping, float_t early_stopping_target_loss) {
     Serial.printf("Training on %u images...\n", num_samples);
 
     // Configure cross-entropy loss
@@ -434,6 +435,12 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         epoch_loss /= steps;
         Serial.printf("Epoch %u/%u - Loss: %.4f\n", epoch + 1, num_epoch, epoch_loss);
         store_model_parameters();
+
+        if ( (early_stopping == true) && (epoch_loss < early_stopping_target_loss))
+        {
+            Serial.printf("Epoch Loss (%.4f) is less than Target Loss (%.4f), Early stopping the training!\n", epoch_loss, early_stopping_target_loss);
+            break;
+        }
     }
 
     aiprint("Finished training\n");
