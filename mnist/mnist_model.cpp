@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include "mnist_model.h"
 
 // ===== Constructor / Destructor =====
@@ -310,17 +311,26 @@ uint32_t MNISTModel::infer(float* input_buffer) {
 void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
     Serial.printf("Testing %u images...\n", num_samples);
 
-    float* input_buffer = (float*)ps_malloc(INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
+    uint8_t* input_buffer = (uint8_t*)ps_malloc(1 * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(uint8_t));
     uint8_t* target_buffer = (uint8_t*)ps_malloc(sizeof(uint8_t));
-    if (!input_buffer || !target_buffer) {
+    float* input_normalized_buffer = (float*)ps_malloc(1 * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
+    if (!input_buffer || !target_buffer || !input_normalized_buffer) {
         Serial.println(F("Buffer allocation failed"));
+        if (input_buffer) free(input_buffer);
+        if (target_buffer) free(target_buffer);
+        if (input_normalized_buffer) free(input_normalized_buffer);
         return;
     }
 
     uint32_t correct = 0;
     for (uint32_t i = 0; i < num_samples; i++) {
         ds.next_batch(1, input_buffer, target_buffer);
-        uint32_t pred = infer(input_buffer);
+        uint32_t total_elements = 1 * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH;
+        for (uint32_t i = 0; i < total_elements; i++) {
+            input_normalized_buffer[i] = static_cast<float>(input_buffer[i]) / 255.0f;
+        }
+
+        uint32_t pred = infer(input_normalized_buffer);
         uint32_t actual = target_buffer[0];
         if (pred == actual) correct++;
         Serial.printf("Image %d: Predicted %u, Actual %u, %s\n",
@@ -332,6 +342,7 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
 
     free(input_buffer);
     free(target_buffer);
+    free(input_normalized_buffer);
 }
 
 
@@ -367,13 +378,15 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
         return;
 
     // Allocate input/target buffers for one batch
-    float* input_buffer = (float*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
+    uint8_t* input_buffer = (uint8_t*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(uint8_t));
     uint8_t* target_buffer = (uint8_t*)ps_malloc(batch_size * sizeof(uint8_t));
+    float* input_normalized_buffer = (float*)ps_malloc(batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH * sizeof(float));
     float* target_onehot_buffer = (float*)ps_malloc(batch_size * OUTPUT_SIZE * sizeof(float));
-    if (!input_buffer || !target_buffer || !target_onehot_buffer) {
+    if (!input_buffer || !target_buffer || !input_normalized_buffer || !target_onehot_buffer) {
         Serial.println(F("Buffer allocation failed"));
         if (input_buffer) free(input_buffer);
         if (target_buffer) free(target_buffer);
+        if (input_normalized_buffer) free(input_normalized_buffer);
         if (target_onehot_buffer) free(target_onehot_buffer);
         free_training_memory();
         return;
@@ -388,6 +401,11 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
             // Get batch
             ds.next_batch(batch_size, input_buffer, target_buffer);
 
+            uint32_t total_elements = batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH;
+            for (uint32_t i = 0; i < total_elements; i++) {
+                input_normalized_buffer[i] = static_cast<float>(input_buffer[i]) / 255.0f;
+            }
+
             // Convert labels → one-hot float32
             for (uint32_t i = 0; i < batch_size; i++) {
                 for (uint32_t c = 0; c < OUTPUT_SIZE; c++) {
@@ -399,7 +417,7 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
             // Create tensors
             const uint16_t input_shape[] = { batch_size, INPUT_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH };
             const uint16_t target_shape[] = { batch_size, OUTPUT_SIZE };
-            aitensor_t input_tensor  = AITENSOR_4D_F32(input_shape, input_buffer);
+            aitensor_t input_tensor  = AITENSOR_4D_F32(input_shape, input_normalized_buffer);
             aitensor_t target_tensor = AITENSOR_2D_F32(target_shape, target_onehot_buffer);
 
             // Train step
@@ -422,6 +440,7 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
     // Cleanup
     free(input_buffer);
     free(target_buffer);
+    free(input_normalized_buffer);
     free(target_onehot_buffer);
     free_training_memory();
 }
