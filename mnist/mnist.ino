@@ -2,7 +2,6 @@
 #include <SD_MMC.h>
 #include "mnist_model.h"
 #include "dataset.h"
-#include "mnist_data.h"
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
@@ -61,7 +60,7 @@ void setup() {
 
     SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
     if (!SD_MMC.begin("/sdcard", true, true, SDMMC_FREQ_DEFAULT, 5)) {
-      Serial.println("Card Mount Failed");
+        Serial.println("Card Mount Failed");
         while (1);
     }
     uint8_t cardType = SD_MMC.cardType();

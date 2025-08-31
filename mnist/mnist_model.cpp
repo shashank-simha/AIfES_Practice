@@ -11,7 +11,7 @@ MNISTModel::MNISTModel() : parameter_memory(nullptr), training_memory(nullptr), 
 }
 
 MNISTModel::~MNISTModel()
-{ 
+{
     free_parameter_memory();
     free_training_memory();
     free_inference_memory();
@@ -35,7 +35,7 @@ bool MNISTModel::build_model() {
     static ailayer_softmax_f32_t softmax_layer = AILAYER_SOFTMAX_F32_A();
 
     // Layer pointer to perform the connection
-    ailayer_t *x;    
+    ailayer_t *x;
 
     model.input_layer = ailayer_input_f32_default(&input_layer);
     if (!model.input_layer) return false;
@@ -215,7 +215,7 @@ bool MNISTModel::allocate_parameter_memory() {
     if (!parameter_memory) return false;
     aialgo_distribute_parameter_memory(&model, parameter_memory, size);
     Serial.printf("Parameter memory allocated: %u bytes, Free PSRAM: %u bytes\n",
-                size, ESP.getFreePsram());
+                  size, ESP.getFreePsram());
     return true;
 }
 
@@ -234,7 +234,7 @@ bool MNISTModel::allocate_training_memory(aiopti_t *optimizer) {
     aialgo_schedule_training_memory(&model, optimizer, training_memory, size);
     aialgo_init_model_for_training(&model, optimizer);
     Serial.printf("Training memory allocated: %u bytes, Free PSRAM: %u bytes\n",
-                size, ESP.getFreePsram());
+                  size, ESP.getFreePsram());
     return true;
 }
 
@@ -252,7 +252,7 @@ bool MNISTModel::allocate_inference_memory() {
     if (!inference_memory) return false;
     aialgo_schedule_inference_memory(&model, inference_memory, size);
     Serial.printf("Inference memory allocated: %u bytes, Free PSRAM: %u bytes\n",
-                size, ESP.getFreePsram());
+                  size, ESP.getFreePsram());
     return true;
 }
 
@@ -466,16 +466,16 @@ void MNISTModel::train(Dataset& ds, uint32_t num_samples, uint32_t batch_size, u
 }
 
 void showProgressBar(int current, int total, const char * metric) {
-  int percent = (current * 100) / total;
-  int barWidth = 50;  // length of the bar in characters
-  int pos = (percent * barWidth) / 100;
+    int percent = (current * 100) / total;
+    int barWidth = 50;  // length of the bar in characters
+    int pos = (percent * barWidth) / 100;
 
-  Serial.print("Progress: [");
-  for (int i = 0; i < barWidth; i++) {
-    if (i < pos) Serial.print("=");
-    else if (i == pos) Serial.print(">");
-    else Serial.print(" ");
-  }
-  Serial.print("] ");
-  Serial.printf("%d%% %d/%d %s...\r\n", percent, current, total, metric);
+    Serial.print("Progress: [");
+    for (int i = 0; i < barWidth; i++) {
+        if (i < pos) Serial.print("=");
+        else if (i == pos) Serial.print(">");
+        else Serial.print(" ");
+    }
+    Serial.print("] ");
+    Serial.printf("%d%% %d/%d %s...\r\n", percent, current, total, metric);
 }

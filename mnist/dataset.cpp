@@ -16,7 +16,7 @@ Dataset::Dataset(const char* image_files[], uint32_t num_chunks)
 
     if (total_chunks == 0) {
         Serial.println("Error: No image chunks provided.");
-        while (1) {}
+        while (1);
     }
 
     // -------- Pre-scan chunks --------
@@ -24,14 +24,14 @@ Dataset::Dataset(const char* image_files[], uint32_t num_chunks)
         File f = SD_MMC.open(image_files[i], FILE_READ);
         if (!f) {
             Serial.printf("Error: Failed to open image chunk %s\n", image_files[i]);
-            while (1) {}
+            while (1);
         }
         size_t img_size = f.size();
         f.close();
 
         if (img_size % (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH) != 0) {
             Serial.printf("Error: Image chunk %s size not multiple of image dimension\n", image_files[i]);
-            while (1) {}
+            while (1);
         }
 
         if (img_size > max_image_chunk_size) {
@@ -43,13 +43,13 @@ Dataset::Dataset(const char* image_files[], uint32_t num_chunks)
     input_data_psram = (uint8_t*)ps_malloc(max_image_chunk_size);
     if (!input_data_psram) {
         Serial.println("Error: Failed to allocate PSRAM for input.");
-        while (1) {}
+        while (1);
     }
 
     // Load first chunk
     if (!load_chunk(current_chunk)) {
         Serial.println("Error: Failed to load initial chunk.");
-        while (1) {}
+        while (1);
     }
 }
 
@@ -64,12 +64,12 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
 
     if (total_chunks == 0) {
         Serial.println("Error: No image chunks provided.");
-        while (1) {}
+        while (1);
     }
 
     if (!label_files) {
         Serial.println("Error: Label files array is null.");
-        while (1) {}
+        while (1);
     }
 
     // -------- Pre-scan chunks --------
@@ -78,14 +78,14 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
         File f = SD_MMC.open(image_files[i], FILE_READ);
         if (!f) {
             Serial.printf("Error: Failed to open image chunk %s\n", image_files[i]);
-            while (1) {}
+            while (1);
         }
         size_t img_size = f.size();
         f.close();
 
         if (img_size % (INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH) != 0) {
             Serial.printf("Error: Image chunk %s size not multiple of image dimension\n", image_files[i]);
-            while (1) {}
+            while (1);
         }
         if (img_size > max_image_chunk_size) {
             max_image_chunk_size = img_size;
@@ -97,7 +97,7 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
         File lf = SD_MMC.open(label_files[i], FILE_READ);
         if (!lf) {
             Serial.printf("Error: Failed to open label chunk %s\n", label_files[i]);
-            while (1) {}
+            while (1);
         }
         size_t lbl_size = lf.size();
         lf.close();
@@ -105,7 +105,7 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
         if (lbl_size != num_images) {
             Serial.printf("Error: Label count %u does not match image count %u in chunk %u\n",
                           lbl_size, num_images, i);
-            while (1) {}
+            while (1);
         }
         if (lbl_size > max_label_chunk_size) {
             max_label_chunk_size = lbl_size;
@@ -117,13 +117,13 @@ Dataset::Dataset(const char* image_files[], const char* label_files[], uint32_t 
     target_data_psram = (uint8_t*)ps_malloc(max_label_chunk_size);
     if (!input_data_psram || !target_data_psram) {
         Serial.println("Error: Failed to allocate PSRAM for input/target.");
-        while (1) {}
+        while (1);
     }
 
     // Load first chunk
     if (!load_chunk(current_chunk)) {
         Serial.println("Error: Failed to load initial chunk.");
-        while (1) {}
+        while (1);
     }
 }
 
@@ -199,7 +199,7 @@ void Dataset::next_batch(uint32_t batch_size, uint8_t* input_buffer) {
         if (cursor >= dataset_size && remaining > 0) {
             if (!load_chunk((current_chunk + 1) % total_chunks)) {
                 Serial.println("Fatal: Failed to load next chunk during batch read.");
-                while (1) {}
+                while (1);
             }
         }
     }
@@ -232,7 +232,7 @@ void Dataset::next_batch(uint32_t batch_size, uint8_t* input_buffer, uint8_t* ta
         if (cursor >= dataset_size && remaining > 0) {
             if (!load_chunk((current_chunk + 1) % total_chunks)) {
                 Serial.println("Fatal: Failed to load next chunk during batch read.");
-                while (1) {}
+                while (1);
             }
         }
     }
