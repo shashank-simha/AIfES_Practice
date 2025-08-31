@@ -13,9 +13,9 @@ SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 #define SD_MMC_D0  40
 
 #define NUM_TRAIN_CHUNKS 2
-#define NUM_IMAGES_PER_TRAIN_CHUNK 94   // 94 images per chunk
+#define NUM_IMAGES_PER_TRAIN_CHUNK 100
 #define NUM_TEST_CHUNKS 2
-#define NUM_IMAGES_PER_TEST_CHUNK 95    // 95 images per chunk
+#define NUM_IMAGES_PER_TEST_CHUNK 100
 #define BATCH_SIZE 4
 #define EPOCHS 3
 #define RETRAIN false
