@@ -2,92 +2,65 @@
 import numpy as np
 from torchvision import datasets
 from torchvision.transforms import ToTensor
+import os
 
-# ------------------ For Dataset generation ------------------
-NUM_TRAIN_SUBSET = 200
-NUM_TEST_SUBSET = 20
+# ------------------ Config ------------------
 NUM_CLASSES = 10
+NUM_TRAIN_CHUNKS = 20
+NUM_TEST_CHUNKS = 10
+OUTPUT_DIR = "mnist_chunks"
 
 # ------------------ Load MNIST ------------------
 transform = ToTensor()
 full_train = datasets.MNIST(root="data", train=True, transform=transform, download=True)
 full_test = datasets.MNIST(root="data", train=False, transform=transform, download=True)
 
-# ------------------ Select train subset ------------------
-np.random.seed(42)
-train_idx = []
-for i in range(NUM_CLASSES):
-    class_indices = np.where(full_train.targets == i)[0]
-    train_idx.extend(
-        np.random.choice(class_indices, size=NUM_TRAIN_SUBSET // NUM_CLASSES, replace=False)
-    )
-train_idx = np.array(train_idx)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-train_images_subset = full_train.data[train_idx].numpy()
-train_labels_subset = full_train.targets[train_idx].numpy()
-print("Train subset class counts:", np.bincount(train_labels_subset, minlength=NUM_CLASSES))
+def stratified_chunks(images, labels, num_chunks, prefix):
+    """
+    Split dataset into balanced chunks with fair representation of each class.
+    Saves each chunk to {prefix}_images_chunk{i}.bin and {prefix}_labels_chunk{i}.bin
+    """
+    class_indices = [np.where(labels == i)[0] for i in range(NUM_CLASSES)]
+    # Shuffle each class
+    for ci in class_indices:
+        np.random.shuffle(ci)
 
-# ------------------ Select test subset ------------------
-test_idx = []
-for i in range(NUM_CLASSES):
-    class_indices = np.where(full_test.targets == i)[0]
-    test_idx.extend(
-        np.random.choice(class_indices, size=NUM_TEST_SUBSET // NUM_CLASSES, replace=False)
-    )
-test_idx = np.array(test_idx)
+    # Number of samples per class per chunk
+    per_class_per_chunk = [len(ci) // num_chunks for ci in class_indices]
 
-test_images_subset = full_test.data[test_idx].numpy()
-test_labels_subset = full_test.targets[test_idx].numpy()
-print("Test subset class counts:", np.bincount(test_labels_subset, minlength=NUM_CLASSES))
+    # Build chunks
+    for chunk_id in range(num_chunks):
+        chunk_imgs, chunk_lbls = [], []
+        for cls, ci in enumerate(class_indices):
+            start = chunk_id * per_class_per_chunk[cls]
+            end = (chunk_id + 1) * per_class_per_chunk[cls]
+            idxs = ci[start:end]
+            chunk_imgs.append(images[idxs])
+            chunk_lbls.append(labels[idxs])
+        # Concatenate classes for this chunk
+        chunk_imgs = np.concatenate(chunk_imgs, axis=0)
+        chunk_lbls = np.concatenate(chunk_lbls, axis=0)
 
-# ------------------ Generate dataset header ------------------
-def generate_dataset():
-    with open("mnist_data.h", "w") as f:
-        f.write("#ifndef MNIST_DATA_H\n#define MNIST_DATA_H\n\n")
+        # Shuffle within chunk
+        perm = np.random.permutation(len(chunk_lbls))
+        chunk_imgs, chunk_lbls = chunk_imgs[perm], chunk_lbls[perm]
 
-        # Training dataset
-        f.write(f"// Training dataset\n")
-        f.write(f"const uint8_t train_input_data[{NUM_TRAIN_SUBSET}][1][28][28] PROGMEM = {{\n")
-        for i in range(NUM_TRAIN_SUBSET):
-            f.write("  {\n")
-            for j in range(1):  # channel
-                f.write("    {\n")
-                for k in range(28):  # row
-                    row = ",".join([str(x) for x in train_images_subset[i, k]])
-                    f.write(f"      {{{row}}}" + (",\n" if k < 27 else "\n"))
-                f.write("    }\n")
-            f.write("  }" + (",\n" if i < NUM_TRAIN_SUBSET - 1 else "\n"))
-        f.write("};\n\n")
+        # Save as binary
+        img_file = os.path.join(OUTPUT_DIR, f"{prefix}_images_chunk{chunk_id}.bin")
+        lbl_file = os.path.join(OUTPUT_DIR, f"{prefix}_labels_chunk{chunk_id}.bin")
+        chunk_imgs.astype(np.uint8).tofile(img_file)
+        chunk_lbls.astype(np.uint8).tofile(lbl_file)
 
-        labels = train_labels_subset.astype(np.uint8)
-        f.write(f"const uint8_t train_target_data[{NUM_TRAIN_SUBSET}] PROGMEM = {{\n")
-        for i in range(NUM_TRAIN_SUBSET):
-            f.write(f"  {labels[i]}" + (",\n" if i < NUM_TRAIN_SUBSET - 1 else "\n"))
-        f.write("};\n\n")
+        print(f"Saved {prefix} chunk {chunk_id}: {len(chunk_lbls)} samples "
+              f"(class counts {np.bincount(chunk_lbls, minlength=NUM_CLASSES)})")
 
-        # Test dataset
-        f.write(f"// Test dataset\n")
-        f.write(f"const uint8_t test_input_data[{NUM_TEST_SUBSET}][1][28][28] PROGMEM = {{\n")
-        for i in range(NUM_TEST_SUBSET):
-            f.write("  {\n")
-            for j in range(1):  # channel
-                f.write("    {\n")
-                for k in range(28):  # row
-                    row = ",".join([str(x) for x in test_images_subset[i, k]])
-                    f.write(f"      {{{row}}}" + (",\n" if k < 27 else "\n"))
-                f.write("    }\n")
-            f.write("  }" + (",\n" if i < NUM_TEST_SUBSET - 1 else "\n"))
-        f.write("};\n\n")
+# ------------------ Process train/test ------------------
+stratified_chunks(full_train.data.numpy(), full_train.targets.numpy(),
+                  NUM_TRAIN_CHUNKS, prefix="train")
 
-        labels = test_labels_subset.astype(np.uint8)
-        f.write(f"const uint8_t test_target_data[{NUM_TEST_SUBSET}] PROGMEM = {{\n")
-        for i in range(NUM_TEST_SUBSET):
-            f.write(f"  {labels[i]}" + (",\n" if i < NUM_TEST_SUBSET - 1 else "\n"))
-        f.write("};\n\n")
+stratified_chunks(full_test.data.numpy(), full_test.targets.numpy(),
+                  NUM_TEST_CHUNKS, prefix="test")
 
-        f.write("#endif\n")
-
-    print("Dataset saved to mnist_data.h (uint8_t raw)")
-
-if __name__ == "__main__":
-    generate_dataset()
+print(f"All chunks saved in {OUTPUT_DIR}/")
