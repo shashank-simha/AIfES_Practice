@@ -6,8 +6,8 @@ import os
 
 # ------------------ Config ------------------
 NUM_CLASSES = 10
-NUM_TRAIN_CHUNKS = 20
-NUM_TEST_CHUNKS = 10
+NUM_TRAIN_CHUNKS = 600
+NUM_TEST_CHUNKS = 100
 OUTPUT_DIR = "mnist_chunks"
 
 # ------------------ Load MNIST ------------------
