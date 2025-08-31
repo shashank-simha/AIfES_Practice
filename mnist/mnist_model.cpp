@@ -338,8 +338,6 @@ void MNISTModel::test(Dataset& ds, uint32_t num_samples) {
         uint32_t actual = target_buffer[0];
         if (pred == actual) correct++;
 
-        Serial.printf("Image %d: Predicted %u, Actual %u, %s\n",
-                      i, pred, actual, pred == actual ? "Correct" : "Wrong");
         if (((i+1) * 100) / num_samples > ((i) * 100) / num_samples) {
             showProgressBar(i+1, num_samples, "Images");
         }
