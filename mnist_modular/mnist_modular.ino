@@ -3,10 +3,11 @@
 #include "logger.h"
 #include <vector>
 #include <string>
-// #include "mnist_model.h"
 #include "SDCardDataset.h"
 #include "SDMMCFileAdapter.h"
 #include "MNISTModel.h"
+
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
@@ -112,7 +113,7 @@ void loop() {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
             train_ds->reset();
-            model->train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
+            // model->train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
             test_ds->reset();
             model->test(*test_ds, NUM_TEST_CHUNKS * NUM_IMAGES_PER_TEST_CHUNK);
         }

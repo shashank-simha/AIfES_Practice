@@ -1,10 +1,7 @@
 #pragma once
-#include <cstdint>
-#include <cstddef>
 #include "DatasetBase.h"
-#include "ModelBase.h"
 #include "FileAdapter.h"
-#include <aifes.h>
+#include "ClassificationModel.h"
 
 // ============================
 // MNIST Model Configuration
@@ -24,26 +21,20 @@
 #define POOL_STRIDE         {2, 2}  /**< Pooling stride */
 #define POOL_PADDING        {0, 0}  /**< Pooling padding */
 #define DENSE1_SIZE         32      /**< Units in first dense layer */
+
 #define OUTPUT_SIZE         10      /**< Number of output classes */
-
-static constexpr uint32_t MNIST_INVALID_CLASS = UINT32_MAX;
-
-// ============================
-// MNIST Model Class
-// ============================
 
 /**
  * @brief MNIST model wrapper class.
  *
  * Defines and manages a small CNN model for MNIST digit classification.
- * Inherits from ModelBase to follow the same design as datasets.
  */
-class MNISTModel : public ModelBase {
+class MNISTModel : public ClassificationModel {
 public:
     /**
      * @brief Construct MNISTModel (does not allocate memory).
      * @param cfg Model configuration (shapes, allocators, etc.).
-     * @param param_path Optional path to parameter file (nullptr = no persistence).
+     * @param param_path Optional path to parameter file. If nullptr, no automatic persistence is performed.
      * @param adapter File adapter implementation (abstracted for portability)
      */
     explicit MNISTModel(const ModelConfig& cfg,
@@ -51,102 +42,21 @@ public:
                         FileAdapter* adapter = nullptr);
 
     /**
-     * @brief Destroy MNISTModel (frees allocated memory).
+     * @brief Destroy MNISTModel.
      */
-    ~MNISTModel() override;
-
-    /**
-     * @brief Set parameter file path (for saving/loading model parameters).
-     * @note Must be called before init(). If nullptr is set, persistence is disabled.
-     * @param path Path string or nullptr.
-     */
-    void set_param_path(const char* path);
-
-    /**
-     * @brief Initialize the model (build layers, allocate memory).
-     * @return true if initialization succeeded, false otherwise.
-     */
-    bool init();
-
-    /**
-     * @brief Run inference for a single input.
-     * @param input_buffer Pointer to flattened input (float array).
-     * @return Predicted label index.
-     */
-    uint32_t infer(float* input_buffer);
-
-    /**
-     * @brief Test the model on a dataset.
-     * @param ds Reference to DatasetBase-derived dataset.
-     * @param num_samples Number of samples to test.
-     */
-    void test(DatasetBase& ds, uint32_t num_samples);
-
-    /**
-     * @brief Train the model on a dataset.
-     *
-     * @param ds Dataset to train on.
-     * @param num_samples Number of samples to use.
-     * @param batch_size Training batch size.
-     * @param num_epoch Number of training epochs.
-     * @param retrain If true, retrain from scratch; otherwise, continue training.
-     * @param early_stopping If true, stop early when target loss is reached.
-     * @param early_stopping_target_loss Loss threshold for early stopping.
-     */
-    void train(DatasetBase& ds,
-               uint32_t num_samples,
-               uint32_t batch_size,
-               uint32_t num_epoch,
-               bool retrain,
-               bool early_stopping,
-               float early_stopping_target_loss);
+    ~MNISTModel() = default;
 
 private:
-    // ============
-    // Model state
-    // ============
-
-    aimodel_t model;              /**< AIfES model definition */
-    void* parameter_memory;       /**< Memory for model parameters */
-    void* training_memory;        /**< Memory for training state */
-    void* inference_memory;       /**< Memory for inference state */
-
-    const char* params_file_path; /**< Path to store/load parameters (user-specified) */
-    FileAdapter* adapter;         /**< File adapter used to read data from storage */
-
-
-    // ===================
-    // Internal functions
-    // ===================
-
-    /** @brief Build the MNIST CNN model. */
-    bool build_model();
-
-    /** @brief Load model parameters from persistent storage. */
-    bool load_model_parameters();
-
-    /** @brief Store model parameters to persistent storage. */
-    bool store_model_parameters();
-
-    /** @brief Allocate memory for model parameters. */
-    bool allocate_parameter_memory();
-
-    /** @brief Free memory used for model parameters. */
-    void free_parameter_memory();
-
     /**
-     * @brief Allocate memory for training.
-     * @param optimizer Optimizer instance.
-     * @return true if allocation succeeded, false otherwise.
+     * @brief Build the MNIST-specific model architecture.
+     *
+     * Overrides the base method to construct the layer sequence:
+     * - Input layer: (1, 28, 28)
+     * - Conv/Pool layers
+     * - Fully-connected layers
+     * - Softmax output layer with 10 classes
+     *
+     * @return true if the model was built successfully, false otherwise.
      */
-    bool allocate_training_memory(aiopti_t* optimizer);
-
-    /** @brief Free memory used for training. */
-    void free_training_memory();
-
-    /** @brief Allocate memory for inference. */
-    bool allocate_inference_memory();
-
-    /** @brief Free memory used for inference. */
-    void free_inference_memory();
+    bool build_model() override;
 };

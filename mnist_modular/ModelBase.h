@@ -24,7 +24,7 @@ struct ModelConfig {
 /**
  * @brief Base class for ML models.
  *
- * Provides common config handling and allocator support.
+ * Provides common configuration handling and allocator support.
  * Derived models can implement training, inference, and testing.
  */
 class ModelBase {
