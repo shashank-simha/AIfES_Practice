@@ -1,9 +1,10 @@
 #pragma once
+#include "config.h"
 #include <cstdio>
 
 // ===== Logger configuration =====
 #ifndef LOG_LEVEL
-#define LOG_LEVEL 2  // Default: INFO
+#define LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
 #define LOG_LEVEL_ERROR 0

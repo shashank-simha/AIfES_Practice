@@ -7,8 +7,6 @@
 #include "SDMMCFileAdapter.h"
 #include "MNISTModel.h"
 
-#define LOG_LEVEL LOG_LEVEL_DEBUG
-
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 
