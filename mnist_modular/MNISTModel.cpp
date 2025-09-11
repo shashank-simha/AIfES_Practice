@@ -1,5 +1,4 @@
 #include "FileAdapter.h"
-// mnist_model.cpp
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
@@ -67,8 +66,8 @@ void MNISTModel::set_param_path(const char* path)
  */
 bool MNISTModel::build_model() {
     // ===== Layers =====
-    static std::vector<uint16_t> input_shape(config.input_shape.begin(), config.input_shape.end());
-    static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(input_shape.size(), input_shape.data());
+    static uint16_t input_shape[] = {1, config.input_shape[0], config.input_shape[1], config.input_shape[2]};
+    static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
     static ailayer_conv2d_f32_t conv1_layer = AILAYER_CONV2D_F32_A(CONV1_FILTERS, KERNEL_SIZE, STRIDE, DILATION, PADDING);
     static ailayer_relu_f32_t relu1_layer = AILAYER_RELU_F32_A();
     static ailayer_maxpool2d_f32_t pool1_layer = AILAYER_MAXPOOL2D_F32_A(POOL_SIZE, POOL_STRIDE, POOL_PADDING);
@@ -503,11 +502,11 @@ void MNISTModel::test(DatasetBase& ds, uint32_t num_samples) {
 
     uint32_t correct = 0;
     for (uint32_t idx = 0; idx < num_samples; ++idx) {
-        BatchStatus st = ds.next_batch(1, input_buffer, target_buffer);
-        if (st == BatchStatus::ERROR) {
-            LOG_ERROR("MNISTModel: Dataset next_batch returned ERROR at idx=%u", idx);
+        BatchStatus st = ds.fetch_batch(1, input_buffer, target_buffer);
+        if (st == BatchStatus::Error) {
+            LOG_ERROR("MNISTModel: Dataset fetch_batch returned error at idx=%u", idx);
             break;
-        } else if (st == BatchStatus::END) {
+        } else if (st == BatchStatus::End) {
             LOG_INFO("MNISTModel: Reached end of dataset at idx=%u", idx);
             break;
         }
@@ -636,12 +635,12 @@ void MNISTModel::train(DatasetBase& ds,
         float epoch_loss = 0.0f;
 
         for (uint32_t step = 0; step < steps; ++step) {
-            BatchStatus st = ds.next_batch(batch_size, input_buffer, target_buffer);
-            if (st == BatchStatus::ERROR) {
-                LOG_ERROR("MNISTModel: Dataset next_batch returned ERROR at step=%u", step);
+            BatchStatus st = ds.fetch_batch(batch_size, input_buffer, target_buffer);
+            if (st == BatchStatus::Error) {
+                LOG_ERROR("MNISTModel: Dataset fetch_batch returned error at step=%u", step);
                 goto training_cleanup;
-            } else if (st == BatchStatus::END) {
-                LOG_INFO("MNISTModel: Dataset reached END during training at step=%u", step);
+            } else if (st == BatchStatus::End) {
+                LOG_INFO("MNISTModel: Dataset reached end during training at step=%u", step);
                 goto training_cleanup;
             }
 

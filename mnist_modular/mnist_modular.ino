@@ -6,6 +6,7 @@
 // #include "mnist_model.h"
 #include "SDCardDataset.h"
 #include "SDMMCFileAdapter.h"
+#include "MNISTModel.h"
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
@@ -25,14 +26,14 @@ SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB
 #define EARLY_STOPPING true
 #define EARLY_STOPPING_TARGET_LOSS 0.075
 
-const char* train_image_files[] = {
+std::vector<std::string> train_image_files = {
     "/mnist_chunks/train_images_chunk0.bin",
     "/mnist_chunks/train_images_chunk1.bin",
     "/mnist_chunks/train_images_chunk2.bin",
     "/mnist_chunks/train_images_chunk3.bin",
     "/mnist_chunks/train_images_chunk4.bin"
 };
-const char* train_label_files[] = {
+std::vector<std::string> train_label_files = {
     "/mnist_chunks/train_labels_chunk0.bin",
     "/mnist_chunks/train_labels_chunk1.bin",
     "/mnist_chunks/train_labels_chunk2.bin",
@@ -54,8 +55,8 @@ std::vector<std::string> test_label_files = {
     "/mnist_chunks/test_labels_chunk4.bin"
 };
 
-// MNISTModel model;
-// SDCardDataset<typename SampleT>* train_ds = nullptr;
+MNISTModel* model = nullptr;
+SDCardDataset<uint8_t, uint8_t>* train_ds = nullptr;
 SDCardDataset<uint8_t, uint8_t>* test_ds = nullptr;
 
 void setup() {
@@ -79,23 +80,29 @@ void setup() {
     }
 
     // --- Build dataset config ---
-    DatasetConfig cfg;
-    cfg.input_shape = {1, 28, 28};
-    cfg.label_shape = {1};
-    cfg.alloc_strategy = AllocationStrategy::LAZY;
-    cfg.end_policy = BatchEndPolicy::DROP_LAST;
-    cfg.allocator_fn = malloc;
-    cfg.free_fn = free;
+    DatasetConfig db_cfg;
+    db_cfg.input_shape = {1, 28, 28};
+    db_cfg.label_shape = {1};
+    db_cfg.alloc_strategy = AllocationStrategy::Lazy;
+    db_cfg.end_policy = BatchEndPolicy::DropLast;
+    db_cfg.allocator_fn = ps_malloc;
+    db_cfg.free_fn = free;
 
     // Instantiate Dataset after memory/SD ready
-    // train_ds = new SDCardDataset<typename SampleT>(train_image_files, train_label_files, NUM_TRAIN_CHUNKS);
-    test_ds = new SDCardDataset<uint8_t, uint8_t>(cfg, test_image_files, test_label_files, new SDMMCFileAdapter());
+    train_ds = new SDCardDataset<uint8_t, uint8_t>(db_cfg, train_image_files, train_label_files, new SDMMCFileAdapter());
+    test_ds = new SDCardDataset<uint8_t, uint8_t>(db_cfg, test_image_files, test_label_files, new SDMMCFileAdapter());
     Serial.println("Dataset initialized");
 
-    // if (!model.init()) {
-    //     Serial.println(F("Model init failed"));
-    //     while (1);
-    // }
+    // --- Build dataset config ---
+    ModelConfig model_cfg;
+    model_cfg.input_shape = {1, 28, 28};
+    model_cfg.output_shape = {1};
+    model_cfg.allocator_fn = ps_malloc;
+    model_cfg.free_fn = free;
+
+    model = new MNISTModel(model_cfg);
+    model->init();
+    Serial.println("Model initialized");
 
     Serial.println(F("Type 't' to train and test the model"));
 }
@@ -104,10 +111,10 @@ void loop() {
     if (Serial.available() > 0) {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
-            // train_ds->reset();
-            // model.train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
-            // test_ds->reset();
-            // model.test(*test_ds, NUM_TEST_CHUNKS * NUM_IMAGES_PER_TEST_CHUNK);
+            train_ds->reset();
+            model->train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
+            test_ds->reset();
+            model->test(*test_ds, NUM_TEST_CHUNKS * NUM_IMAGES_PER_TEST_CHUNK);
         }
     }
 }
