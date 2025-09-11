@@ -64,6 +64,11 @@ void setup() {
     Serial.begin(115200);
     while (!Serial);
 
+    set_log_sink(serial_printf_sink);
+
+    set_log_level(LOG_LEVEL_DEBUG); // now global + runtime
+    LOG_INFO("Logger initialized at level %d", get_log_level());
+
     SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
     if (!SD_MMC.begin("/sdcard", true, true, SDMMC_FREQ_DEFAULT, 5)) {
         Serial.println("Card Mount Failed");

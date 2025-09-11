@@ -1,96 +1,113 @@
 #pragma once
+#include <cstdarg>
 #include <cstdio>
-#include <Arduino.h>
+#include <functional>
 
-// ===== Logger configuration =====
-#ifndef LOG_LEVEL
-#define LOG_LEVEL LOG_LEVEL_INFO
-#endif
-
+// ===== Logger levels =====
 #define LOG_LEVEL_ERROR 0
 #define LOG_LEVEL_WARN  1
 #define LOG_LEVEL_INFO  2
 #define LOG_LEVEL_DEBUG 3
 
-/**
- * @file logger.h
- * @brief Cross-platform logging utilities.
- *
- * By default, logs use printf. On embedded platforms (e.g. Arduino),
- * users can override LOG_INFO, LOG_WARN, LOG_ERROR, or LOG_PROGRESS
- * before including this header, e.g.:
- *
- * #define LOG_INFO(...)    Serial.printf("[INFO] " __VA_ARGS__ "\n")
- * #define LOG_WARN(...)    Serial.printf("[WARN] " __VA_ARGS__ "\n")
- * #define LOG_ERROR(...)   Serial.printf("[ERROR] " __VA_ARGS__ "\n")
- * #define LOG_PROGRESS(...) MyCustomProgressBar(__VA_ARGS__)
- * #include "logger.h"
- *
- * Note: the override only reflects in the file/unit that makes the changes
- * For global override, feel free to modify the macros here
- */
+// ---------------- Sink type ----------------
+using LogSink = std::function<void(const char* fmt, va_list args)>;
 
-/* ---------------- Default logging macros ---------------- */
+// ---------------- Default sinks ----------------
+inline void default_printf_sink(const char* fmt, va_list args) {
+    vprintf(fmt, args);
+}
 
-#ifndef LOG_ERROR
-#define LOG_ERROR(...) do { \
-    if (LOG_LEVEL >= LOG_LEVEL_ERROR) { \
-        Serial.printf("[ERROR] "); Serial.printf(__VA_ARGS__); Serial.printf("\n"); \
-    } \
-} while(0)
-#endif
-
-#ifndef LOG_WARN
-#define LOG_WARN(...) do { \
-    if (LOG_LEVEL >= LOG_LEVEL_WARN) { \
-        Serial.printf("[WARN] "); Serial.printf(__VA_ARGS__); Serial.printf("\n"); \
-    } \
-} while(0)
-#endif
-
-#ifndef LOG_INFO
-#define LOG_INFO(...) do { \
-    if (LOG_LEVEL >= LOG_LEVEL_INFO) { \
-        Serial.printf("[INFO] "); Serial.printf(__VA_ARGS__); Serial.printf("\n"); \
-    } \
-} while(0)
-#endif
-
-#ifndef LOG_DEBUG
-#define LOG_DEBUG(...) do { \
-    if (LOG_LEVEL >= LOG_LEVEL_DEBUG) { \
-        Serial.printf("[DEBUG] "); Serial.printf(__VA_ARGS__); Serial.printf("\n"); \
-    } \
-} while(0)
-#endif
-
-
-/* ---------------- Progress bar (default impl) ---------------- */
-
-/**
- * @brief Show a simple textual progress bar.
- *
- * Users can override LOG_PROGRESS before including this header.
- * Default implementation uses printf and draws a fixed-width bar.
- *
- * @param current Current progress count
- * @param total   Total count
- * @param metric  Description string
- */
-#ifndef LOG_PROGRESS
-inline void LOG_PROGRESS(int current, int total, const char* metric) {
-    if (total <= 0) total = 1; // avoid divide-by-zero
-    int percent = (current * 100) / total;
-    int barWidth = 50;  // number of characters in the bar
-    int pos = (percent * barWidth) / 100;
-
-    Serial.printf("Progress: [");
-    for (int i = 0; i < barWidth; i++) {
-        if (i < pos) Serial.printf("=");
-        else if (i == pos) Serial.printf(">");
-        else Serial.printf(" ");
-    }
-    Serial.printf("] %d%% (%d/%d) %s\r", percent, current, total, metric);
-    // fflush(stdout); // ensure progress is flushed immediately
+#if defined(ARDUINO)
+#include <Arduino.h>
+inline void serial_printf_sink(const char* fmt, va_list args) {
+    Serial.vprintf(fmt, args);
 }
 #endif
+
+// ---------------- Global config ----------------
+inline LogSink& get_log_sink() {
+    static LogSink sink = default_printf_sink; // default = printf
+    return sink;
+}
+
+inline void set_log_sink(LogSink sink) {
+    get_log_sink() = sink;
+}
+
+inline int& get_log_level() {
+    static int level = LOG_LEVEL_INFO; // default runtime log level
+    return level;
+}
+
+inline void set_log_level(int level) {
+    get_log_level() = level;
+}
+
+// ---------------- Internal log helper ----------------
+inline void log_message(int level, int threshold,
+                        const char* prefix, const char* fmt, ...) {
+    if (level > threshold) return;
+
+    char buffer[256];
+    int n = snprintf(buffer, sizeof(buffer), "%s", prefix);
+
+    va_list args;
+    va_start(args, fmt);
+
+    // print prefix
+    get_log_sink()(buffer, args);
+
+    // print user message
+    get_log_sink()(fmt, args);
+
+    va_end(args);
+
+    // newline
+    va_list nl;
+    get_log_sink()("\n", nl);
+}
+
+// ---------------- Logging macros ----------------
+#define LOG_ERROR(...) do { \
+    if (get_log_level() >= LOG_LEVEL_ERROR) { \
+        log_message(LOG_LEVEL_ERROR, get_log_level(), "[ERROR] ", __VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_WARN(...) do { \
+    if (get_log_level() >= LOG_LEVEL_WARN) { \
+        log_message(LOG_LEVEL_WARN, get_log_level(), "[WARN] ", __VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_INFO(...) do { \
+    if (get_log_level() >= LOG_LEVEL_INFO) { \
+        log_message(LOG_LEVEL_INFO, get_log_level(), "[INFO] ", __VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_DEBUG(...) do { \
+    if (get_log_level() >= LOG_LEVEL_DEBUG) { \
+        log_message(LOG_LEVEL_DEBUG, get_log_level(), "[DEBUG] ", __VA_ARGS__); \
+    } \
+} while(0)
+
+// ---------------- Progress bar ----------------
+inline void LOG_PROGRESS(int current, int total, const char* metric) {
+    if (total <= 0) total = 1;
+    int percent = (current * 100) / total;
+    int barWidth = 50;
+    int pos = (percent * barWidth) / 100;
+
+    char buf[256];
+    int n = snprintf(buf, sizeof(buf), "Progress: [");
+    for (int i = 0; i < barWidth; i++) {
+        n += snprintf(buf + n, sizeof(buf) - n, "%c",
+                      (i < pos ? '=' : (i == pos ? '>' : ' ')));
+    }
+    snprintf(buf + n, sizeof(buf) - n, "] %d%% (%d/%d) %s\r\n",
+             percent, current, total, metric);
+
+    va_list empty;
+    get_log_sink()(buf, empty);
+}

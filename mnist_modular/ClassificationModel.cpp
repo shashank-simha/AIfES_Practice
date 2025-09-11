@@ -212,6 +212,7 @@ void ClassificationModel::train(DatasetBase& ds,
         epoch_loss /= steps;
         LOG_INFO("Epoch %u/%u - Loss: %.4f", epoch + 1, num_epoch, epoch_loss);
         store_model_parameters();
+        ds.reset();
 
         if (early_stopping && (epoch_loss < early_stopping_target_loss)) {
             LOG_INFO("Early stopping: epoch loss %.4f < target %.4f",
