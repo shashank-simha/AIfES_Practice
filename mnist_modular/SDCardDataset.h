@@ -47,7 +47,7 @@ public:
      *         BatchStatus::EPOCH_END if dataset end reached,
      *         BatchStatus::ERROR on failure.
      */
-    BatchStatus next_batch(size_t batch_size,
+    BatchStatus next_batch_impl(size_t batch_size,
                     void* input_buffer,
                     void* label_buffer = nullptr) override;
 
@@ -67,8 +67,8 @@ private:
 
     SampleT* sample_chunk_buffer; ///< Temporary buffer holding one chunk of samples
     LabelT* label_chunk_buffer;   ///< Temporary buffer holding one chunk of labels
-    uint32_t chunk_total;         ///< Number of samples in the current chunk
-    uint32_t current_chunk;       ///< Index of currently loaded chunk
+    size_t chunk_total;         ///< Number of samples in the current chunk
+    size_t current_chunk;       ///< Index of currently loaded chunk
 
     /**
      * @brief Load one chunk of samples (and optional labels) into internal buffers.
