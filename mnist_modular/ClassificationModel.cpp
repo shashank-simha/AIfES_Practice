@@ -107,29 +107,35 @@ void ClassificationModel::train(DatasetBase& ds,
                                 float early_stopping_target_loss) {
     LOG_INFO("Training on %u samples...", num_samples);
 
+    // ---- Loss and Optimizer setup ----
+    ailoss_crossentropy_f32_t crossentropy_loss;
+    aiopti_sgd_f32_t sgd_opti = { .learning_rate = 0.001f };
+
     // ---- Loss setup ----
-    model.loss = this->loss;
-    if (!model.loss) {
-        ailoss_crossentropy_f32_t crossentropy_loss;
+    if (!this->loss) {
         model.loss = ailoss_crossentropy_f32_default(&crossentropy_loss, model.output_layer);
         if (!model.loss) {
             LOG_ERROR("ClassificationModel: loss initialization failed");
             return;
         }
         LOG_INFO("ClassificationModel: default loss function (crossentropy) initialized");
+    } else {
+        model.loss = this->loss;
     }
 
     // ---- Optimizer setup ----
-    aiopti_t* opti = this->optimizer;
-    if (!opti) {
-        aiopti_sgd_f32_t sgd_opti = { .learning_rate = 0.001f };
+    aiopti_t* opti = nullptr;
+    if (!this->optimizer) {
         opti = aiopti_sgd_f32_default(&sgd_opti);
         if (!opti) {
             LOG_ERROR("ClassificationModel: optimizer initialization failed");
             return;
         }
         LOG_INFO("ClassificationModel: default optimizer (sgd) initialized");
+    } else {
+        opti = this->optimizer;
     }
+
 
     // ---- Retrain option ----
     if (retrain) {
@@ -158,7 +164,10 @@ void ClassificationModel::train(DatasetBase& ds,
         return;
     }
 
-    LOG_DEBUG("ClassificationModel: starting training loop");
+    LOG_DEBUG("ClassificationModel: allocated input_buffer: %u bytes, target_idx: %u bytes, target_onehot: %u bytes",
+              input_elems * sizeof(float),
+              batch_size * sizeof(uint32_t),
+              batch_size * config.output_shape[0] * sizeof(float));
 
     // ---- Training loop ----
     for (uint32_t epoch = 0; epoch < num_epoch; epoch++) {

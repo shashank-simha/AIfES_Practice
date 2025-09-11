@@ -22,6 +22,20 @@ bool MNISTModel::build_model() {
         return false;
     }
 
+    if (config.output_shape.size() != 1) {
+        LOG_ERROR("MNISTModel: output_shape must be a single value, got %zu", config.output_shape.size());
+        return false;
+    }
+
+    if (config.output_shape[0] == 1) {
+        LOG_WARN("MNISTModel: output_shape=1 detected. Internally adjusted to 10 for MNIST classification");
+        config.output_shape[0] = OUTPUT_SIZE;
+    }
+    else if (config.output_shape[0] != OUTPUT_SIZE) {
+        LOG_ERROR("MNISTModel: invalid output_shape=%u. Must be 1 or %u", config.output_shape[0], OUTPUT_SIZE);
+        return false;
+    }
+
     // ===== Layers =====
     static uint16_t input_shape[] = {1, config.input_shape[0], config.input_shape[1], config.input_shape[2]};
     static ailayer_input_f32_t input_layer = AILAYER_INPUT_F32_A(4, input_shape);
