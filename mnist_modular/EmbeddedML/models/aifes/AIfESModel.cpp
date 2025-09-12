@@ -203,9 +203,15 @@ bool AIfESModel::init() {
 
     if (!allocate_parameter_memory()) return false;
 
+    // initialize parameters with default values
+    aialgo_initialize_parameters_model(&model);
+
+    // try loading if pre-trained params are available
     if (params_file_path && adapter) {
         if (!load_model_parameters()) return false;
     }
 
     if (!allocate_inference_memory()) return false;
+
+    return true;
 }
