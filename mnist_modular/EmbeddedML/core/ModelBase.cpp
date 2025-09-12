@@ -1,5 +1,6 @@
-#include "ModelBase.h"
 #include <cstdlib>
+
+#include "ModelBase.h"
 
 ModelBase::ModelBase(const ModelConfig& cfg)
     : config(cfg)

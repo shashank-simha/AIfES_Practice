@@ -1,7 +1,8 @@
 #pragma once
-#include "FileAdapter.h"
 #include <SD_MMC.h>
 #include <FS.h>
+
+#include "../core/FileAdapter.h"
 
 /**
  * @brief SD_MMC implementation of FileAdapter for Arduino/ESP32.

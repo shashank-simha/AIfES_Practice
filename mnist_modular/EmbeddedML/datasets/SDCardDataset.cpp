@@ -1,5 +1,6 @@
-#include "SDCardDataset.h"
 #include <cstring>
+
+#include "SDCardDataset.h"
 
 template<typename SampleT, typename LabelT>
 SDCardDataset<SampleT, LabelT>::SDCardDataset(

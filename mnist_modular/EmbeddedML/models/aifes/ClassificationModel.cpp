@@ -1,7 +1,8 @@
-#include "ClassificationModel.h"
-#include "logger.h"
 #include <algorithm>
 #include <cstring>
+
+#include "ClassificationModel.h"
+#include "../../utils/logger.h"
 
 ClassificationModel::ClassificationModel(const ModelConfig& cfg,
                                          const char* param_path,

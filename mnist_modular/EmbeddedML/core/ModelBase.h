@@ -2,7 +2,8 @@
 #include <vector>
 #include <functional>
 #include <cstddef>
-#include "logger.h"
+
+#include "../utils/logger.h"
 
 /**
  * @brief Configuration for a model instance.

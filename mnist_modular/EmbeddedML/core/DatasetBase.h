@@ -5,7 +5,8 @@
 #include <cstddef>
 #include <functional>
 #include <cstdlib>
-#include "logger.h"
+
+#include "../utils/logger.h"
 
 /**
  * @brief Allocation strategy for dataset buffers.

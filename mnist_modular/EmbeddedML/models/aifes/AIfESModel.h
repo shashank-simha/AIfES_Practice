@@ -1,7 +1,8 @@
 #pragma once
-#include "ModelBase.h"
-#include "FileAdapter.h"
 #include <aifes.h>
+
+#include "../../core/ModelBase.h"
+#include "../../core/FileAdapter.h"
 
 /**
  * @brief Task-agnostic base class for AIfES models.

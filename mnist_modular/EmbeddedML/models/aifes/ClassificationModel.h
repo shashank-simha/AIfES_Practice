@@ -1,8 +1,9 @@
 #pragma once
-#include "AIfESModel.h"
-#include "DatasetBase.h"
 #include <cstdint>
 #include <vector>
+
+#include "AIfESModel.h"
+#include "../../core/DatasetBase.h"
 
 /**
  * @brief Generic base class for classification tasks.

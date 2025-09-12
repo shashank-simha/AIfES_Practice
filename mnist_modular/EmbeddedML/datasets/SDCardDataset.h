@@ -1,11 +1,12 @@
 #pragma once
 
-#include "DatasetBase.h"
-#include "FileAdapter.h"
-#include "logger.h"
 #include <vector>
 #include <string>
 #include <cstddef>
+
+#include "../core/DatasetBase.h"
+#include "../core/FileAdapter.h"
+#include "../utils/logger.h"
 
 /**
  * @brief Dataset implementation that streams samples from SD card (or any file system).

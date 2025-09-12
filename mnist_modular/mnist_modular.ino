@@ -1,11 +1,20 @@
 #include <Arduino.h>
 #include <SD_MMC.h>
-#include "logger.h"
 #include <vector>
 #include <string>
-#include "SDCardDataset.h"
-#include "SDMMCFileAdapter.h"
-#include "MNISTModel.h"
+
+#include "EmbeddedML/ModelHub/aifes/mnist/MNISTModel.h"
+#include "EmbeddedML/datasets/SDCardDataset.h"
+#include "EmbeddedML/adapters/SDMMCFileAdapter.h"
+#include "EmbeddedML/utils/logger.h"
+
+// Explicitly include .cpp files to ensure compilation
+#include "EmbeddedML/core/DatasetBase.cpp"
+#include "EmbeddedML/core/ModelBase.cpp"
+#include "EmbeddedML/datasets/SDCardDataset.cpp"
+#include "EmbeddedML/models/aifes/AIfESModel.cpp"
+#include "EmbeddedML/models/aifes/ClassificationModel.cpp"
+#include "EmbeddedML/ModelHub/aifes/mnist/MNISTModel.cpp"
 
 // Set stack size for loopTask to handle large buffers and AIfES internals
 SET_LOOP_TASK_STACK_SIZE(256 * 1024);  // 256KB

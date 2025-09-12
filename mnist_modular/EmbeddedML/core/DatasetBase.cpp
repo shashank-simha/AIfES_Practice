@@ -1,5 +1,6 @@
-#include "DatasetBase.h"
 #include <cstdlib> // malloc/free fallback
+
+#include "DatasetBase.h"
 
 DatasetBase::DatasetBase(const DatasetConfig& cfg)
     : config(cfg),

@@ -1,7 +1,7 @@
 #pragma once
-#include "DatasetBase.h"
-#include "FileAdapter.h"
-#include "ClassificationModel.h"
+#include "../../../core/DatasetBase.h"
+#include "../../../core/FileAdapter.h"
+#include "../../../models/aifes/ClassificationModel.h"
 
 // ============================
 // MNIST Model Configuration

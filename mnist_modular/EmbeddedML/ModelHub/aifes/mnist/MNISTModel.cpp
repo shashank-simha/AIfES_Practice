@@ -1,6 +1,7 @@
 #include <cstdint>
+
 #include "MNISTModel.h"
-#include "logger.h"
+#include "../../../utils/logger.h"
 
 MNISTModel::MNISTModel(const ModelConfig& cfg,
                        const char* param_file_path,

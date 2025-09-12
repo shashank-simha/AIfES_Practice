@@ -1,8 +1,9 @@
-#include "AIfESModel.h"
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
-#include "logger.h"
+
+#include "AIfESModel.h"
+#include "../../utils/logger.h"
 
 AIfESModel::AIfESModel(const ModelConfig& cfg,
                        const char* param_path,
