@@ -66,13 +66,13 @@ void ClassificationModel::test(DatasetBase& ds, uint32_t num_samples) {
     uint32_t total_elements = 1;
     for (auto d : config.input_shape) total_elements *= d;
 
-    float* input_buffer = (float*) ps_malloc(total_elements * sizeof(float));
-    uint32_t* target_buffer = (uint32_t*) ps_malloc(sizeof(uint32_t));
+    float* input_buffer = (float*) config.allocator_fn(total_elements * sizeof(float));
+    uint32_t* target_buffer = (uint32_t*) config.allocator_fn(sizeof(uint32_t));
 
     if (!input_buffer || !target_buffer) {
         LOG_ERROR("ClassificationModel: buffer allocation failed");
-        if (input_buffer) free(input_buffer);
-        if (target_buffer) free(target_buffer);
+        if (input_buffer) config.free_fn(input_buffer);
+        if (target_buffer) config.free_fn(target_buffer);
         return;
     }
 
@@ -95,8 +95,8 @@ void ClassificationModel::test(DatasetBase& ds, uint32_t num_samples) {
     float acc = 100.0f * correct / num_samples;
     LOG_INFO("Accuracy: %u/%u (%.2f%%)", correct, num_samples, acc);
 
-    free(input_buffer);
-    free(target_buffer);
+    config.free_fn(input_buffer);
+    config.free_fn(target_buffer);
 }
 
 void ClassificationModel::train(DatasetBase& ds,
@@ -152,15 +152,15 @@ void ClassificationModel::train(DatasetBase& ds,
     uint32_t input_elems = batch_size;
     for (auto d : config.input_shape) input_elems *= d;
 
-    float* input_buffer  = (float*) ps_malloc(input_elems * sizeof(float));
-    uint32_t* target_idx = (uint32_t*) ps_malloc(batch_size * sizeof(uint32_t));
-    float* target_onehot = (float*) ps_malloc(batch_size * config.output_shape[0] * sizeof(float));
+    float* input_buffer  = (float*) config.allocator_fn(input_elems * sizeof(float));
+    uint32_t* target_idx = (uint32_t*) config.allocator_fn(batch_size * sizeof(uint32_t));
+    float* target_onehot = (float*) config.allocator_fn(batch_size * config.output_shape[0] * sizeof(float));
 
     if (!input_buffer || !target_idx || !target_onehot) {
         LOG_ERROR("ClassificationModel: buffer allocation failed");
-        if (input_buffer) free(input_buffer);
-        if (target_idx) free(target_idx);
-        if (target_onehot) free(target_onehot);
+        if (input_buffer) config.free_fn(input_buffer);
+        if (target_idx) config.free_fn(target_idx);
+        if (target_onehot) config.free_fn(target_onehot);
         free_training_memory();
         return;
     }
@@ -225,8 +225,8 @@ void ClassificationModel::train(DatasetBase& ds,
     LOG_INFO("Finished training");
 
     // ---- Cleanup ----
-    free(input_buffer);
-    free(target_idx);
-    free(target_onehot);
+    config.free_fn(input_buffer);
+    config.free_fn(target_idx);
+    config.free_fn(target_onehot);
     free_training_memory();
 }
