@@ -28,6 +28,17 @@ SDCardDataset<SampleT, LabelT>::SDCardDataset(
         return;
     }
 
+    // Override element sizes to match template types
+    if (config.input_elem_size != sizeof(SampleT)) {
+        LOG_WARN("sample_elem_size mismatch, overriding to sizeof(SampleT)");
+        config.input_elem_size = sizeof(SampleT);
+    }
+
+    if (config.label_elem_size != sizeof(LabelT)) {
+        LOG_WARN("label_elem_size mismatch, overriding to sizeof(LabelT)");
+        config.label_elem_size = sizeof(LabelT);
+    }
+
     // Precompute total number of samples across all chunks
     for (const auto& file : sample_files) {
         if (!adapter->open(file, FileAdapter::OpenMode::READ)) {
@@ -38,14 +49,14 @@ SDCardDataset<SampleT, LabelT>::SDCardDataset(
         size_t file_size = adapter->size();
         adapter->close();
 
-        size_t sample_size = 1;
-        for (auto dim : cfg.input_shape) sample_size *= dim;
+        size_t num_sample_elems = num_elements(config.input_shape);
+        size_t sample_size_bytes = num_sample_elems * config.input_elem_size;
 
-        if (file_size % (sample_size * sizeof(SampleT)) != 0) {
-            LOG_WARN("SDCardDataset: Sample file size not a multiple of sample dimensions: %s", file.c_str());
+        if (file_size % sample_size_bytes != 0) {
+            LOG_WARN("SDCardDataset: Sample file size not a multiple of sample size: %s", file.c_str());
         }
 
-        total_samples += file_size / (sample_size * sizeof(SampleT));
+        total_samples += file_size / sample_size_bytes;
     }
 
     // Allocate buffers for FIXED strategy

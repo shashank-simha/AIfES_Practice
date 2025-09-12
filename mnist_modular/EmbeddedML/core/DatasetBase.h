@@ -43,6 +43,9 @@ struct DatasetConfig {
     std::vector<uint32_t> input_shape;   /**< Shape of each input sample (e.g., {1,28,28}) */
     std::vector<uint32_t> label_shape;   /**< Shape of each label (e.g., {1} or {10}) */
 
+    size_t input_elem_size = 1;  /**< size (in bytes) of each element in an input sample; default to 1 byte */
+    size_t label_elem_size  = 1;  /**< size (in bytes) of each element in a label sample; default to 1 byte */
+
     AllocationStrategy alloc_strategy = AllocationStrategy::Lazy; /**< Buffer allocation strategy */
     BatchEndPolicy end_policy = BatchEndPolicy::DropLast;         /**< Policy at dataset end */
 
