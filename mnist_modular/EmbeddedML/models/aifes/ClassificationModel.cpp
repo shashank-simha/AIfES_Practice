@@ -63,25 +63,24 @@ void ClassificationModel::test(DatasetBase& ds, uint32_t num_samples) {
     LOG_INFO("Testing %u samples...", num_samples);
 
     // Buffers allocated once for input/target
-    uint32_t total_elements = 1;
-    for (auto d : config.input_shape) total_elements *= d;
+    uint32_t batch_size = 1; // infer() is called per sample
 
-    float* input_buffer = (float*) config.allocator_fn(total_elements * sizeof(float));
-    uint32_t* target_buffer = (uint32_t*) config.allocator_fn(sizeof(uint32_t));
+    float* input_buffer  = (float*) config.allocator_fn(batch_size * num_elements(config.input_shape) * sizeof(float));
+    uint32_t* target_idx = (uint32_t*) config.allocator_fn(batch_size * sizeof(uint32_t));
 
-    if (!input_buffer || !target_buffer) {
+    if (!input_buffer || !target_idx) {
         LOG_ERROR("ClassificationModel: buffer allocation failed");
         if (input_buffer) config.free_fn(input_buffer);
-        if (target_buffer) config.free_fn(target_buffer);
+        if (target_idx) config.free_fn(target_idx);
         return;
     }
 
     uint32_t correct = 0;
     for (uint32_t i = 0; i < num_samples; i++) {
-        ds.fetch_batch(1, input_buffer, target_buffer);
+        ds.fetch_batch(1, input_buffer, target_idx);
 
         uint32_t pred   = infer(input_buffer);
-        uint32_t actual = target_buffer[0];
+        uint32_t actual = target_idx[0];
         if (pred == actual) correct++;
 
         LOG_DEBUG("ClassificationModel: pred: %d, actual: %d, correct: %s",
@@ -96,7 +95,7 @@ void ClassificationModel::test(DatasetBase& ds, uint32_t num_samples) {
     LOG_INFO("Accuracy: %u/%u (%.2f%%)", correct, num_samples, acc);
 
     config.free_fn(input_buffer);
-    config.free_fn(target_buffer);
+    config.free_fn(target_idx);
 }
 
 void ClassificationModel::train(DatasetBase& ds,
@@ -149,12 +148,9 @@ void ClassificationModel::train(DatasetBase& ds,
         return;
 
     // ---- Allocate batch buffers ----
-    uint32_t input_elems = batch_size;
-    for (auto d : config.input_shape) input_elems *= d;
-
-    float* input_buffer  = (float*) config.allocator_fn(input_elems * sizeof(float));
+    float* input_buffer  = (float*) config.allocator_fn(batch_size * num_elements(config.input_shape) * sizeof(float));
     uint32_t* target_idx = (uint32_t*) config.allocator_fn(batch_size * sizeof(uint32_t));
-    float* target_onehot = (float*) config.allocator_fn(batch_size * config.output_shape[0] * sizeof(float));
+    float* target_onehot = (float*) config.allocator_fn(batch_size * num_elements(config.output_shape) * sizeof(float));
 
     if (!input_buffer || !target_idx || !target_onehot) {
         LOG_ERROR("ClassificationModel: buffer allocation failed");
@@ -166,9 +162,9 @@ void ClassificationModel::train(DatasetBase& ds,
     }
 
     LOG_DEBUG("ClassificationModel: allocated input_buffer: %u bytes, target_idx: %u bytes, target_onehot: %u bytes",
-              input_elems * sizeof(float),
+              batch_size * num_elements(config.input_shape) * sizeof(float),
               batch_size * sizeof(uint32_t),
-              batch_size * config.output_shape[0] * sizeof(float));
+              batch_size * num_elements(config.output_shape) * sizeof(float));
 
     // ---- Training loop ----
     for (uint32_t epoch = 0; epoch < num_epoch; epoch++) {
@@ -190,8 +186,7 @@ void ClassificationModel::train(DatasetBase& ds,
 
             // Create tensors
             aitensor_t input_tensor  = create_tensor(batch_size, config.input_shape, input_buffer);
-            std::vector<uint32_t> target_shape = { batch_size, static_cast<uint32_t>(config.output_shape[0]) };
-            aitensor_t target_tensor = create_tensor(1, target_shape, target_onehot);
+            aitensor_t target_tensor = create_tensor(batch_size, config.output_shape, target_onehot);
 
             // Train step
             aialgo_train_model(&model, &input_tensor, &target_tensor, opti, batch_size);

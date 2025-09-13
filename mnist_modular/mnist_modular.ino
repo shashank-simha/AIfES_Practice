@@ -130,8 +130,8 @@ void loop() {
     if (Serial.available() > 0) {
         String cmd = Serial.readString();
         if (cmd.indexOf("t") > -1) {
-            // train_ds->reset();
-            // model->train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
+            train_ds->reset();
+            model->train(*train_ds, NUM_TRAIN_CHUNKS * NUM_IMAGES_PER_TRAIN_CHUNK, BATCH_SIZE, EPOCHS, RETRAIN, EARLY_STOPPING, EARLY_STOPPING_TARGET_LOSS);
             test_ds->reset();
             model->test(*test_ds, NUM_TEST_CHUNKS * NUM_IMAGES_PER_TEST_CHUNK);
         }
