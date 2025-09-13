@@ -67,7 +67,9 @@ MNISTModel* model = nullptr;
 SDCardDataset<uint8_t, uint8_t>* train_ds = nullptr;
 SDCardDataset<uint8_t, uint8_t>* test_ds = nullptr;
 
-void normalize(void* input, void* label, size_t batch_size);
+void normalize(const void* raw_input, const void* raw_label,
+               void* dst_input, void* dst_label,
+               size_t batch_size);
 
 void setup() {
     Serial.begin(115200);
@@ -136,18 +138,23 @@ void loop() {
     }
 }
 
-void normalize(void* input, void* label, size_t batch_size) {
-    uint8_t* in_u8 = reinterpret_cast<uint8_t*>(input);   // raw dataset input
-    float* in_f32 = reinterpret_cast<float*>(input);      // buffer in test() already float*
+void normalize(const void* raw_input, const void* raw_label,
+               void* dst_input, void* dst_label,
+               size_t batch_size)
+{
+    const uint8_t* in_u8  = reinterpret_cast<const uint8_t*>(raw_input); // raw MNIST images
+    float*         in_f32 = reinterpret_cast<float*>(dst_input);         // destination (float)
 
     for (size_t i = 0; i < batch_size * INPUT_CHANNELS * INPUT_HEIGHT * INPUT_WIDTH; ++i) {
         in_f32[i] = static_cast<float>(in_u8[i]) / 255.0f;
     }
 
-    // Convert labels from uint8_t → uint32_t
-    uint8_t* lbl_u8 = reinterpret_cast<uint8_t*>(label);
-    uint32_t* lbl_u32 = reinterpret_cast<uint32_t*>(label); // points to test() target_buffer
-    for (size_t i = 0; i < batch_size; ++i) {
-        lbl_u32[i] = static_cast<uint32_t>(lbl_u8[i]);
+    if (raw_label && dst_label) {
+        const uint8_t* lbl_u8  = reinterpret_cast<const uint8_t*>(raw_label); // raw labels
+        uint32_t*      lbl_u32 = reinterpret_cast<uint32_t*>(dst_label);      // destination (uint32)
+
+        for (size_t i = 0; i < batch_size; ++i) {
+            lbl_u32[i] = static_cast<uint32_t>(lbl_u8[i]);
+        }
     }
 }

@@ -124,13 +124,14 @@ public:
     /**
      * @brief Set an optional transformation hook.
      *
-     * Called in-place on each batch after fetching.
+     * Called on each batch after fetching.
      *
-     * Signature: void(void* input, void* label, size_t batch_size)
+     * Signature: void(const void* raw_input, const void* raw_label, void* dst_input, void* dst_label, size_t batch_size)
      *
-     * @param fn Function of signature void(void* input, void* label, size_t batch_size)
+     * @param fn Function of signature
+     * void(const void* raw_input, const void* raw_label, void* dst_input, void* dst_label, size_t batch_size)
      */
-    void set_transform(std::function<void(void*, void*, size_t)> fn);
+    void set_transform(std::function<void(const void*, const void*, void*, void*, size_t)> fn);
 
     /** Access the normalized dataset configuration */
     const DatasetConfig& get_config() const { return config; }
@@ -157,10 +158,35 @@ protected:
                                         void* input_buffer,
                                         void* label_buffer) = 0;
 
+    /**
+     * @brief Default transform function (identity / no-op).
+     *
+     * This helper simply copies raw buffers into destination buffers
+     * without applying any transformation. It is the fallback used when
+     * no transform function is provided via set_transform().
+     *
+     * @param raw_input   Pointer to raw input buffer (from next_batch_impl).
+     * @param raw_label   Pointer to raw label buffer (from next_batch_impl), may be nullptr.
+     * @param dst_input   Pointer to destination input buffer (provided by user).
+     * @param dst_label   Pointer to destination label buffer (provided by user), may be nullptr.
+     * @param batch_size  Number of samples in this batch.
+     */
+    void default_transform(const void* raw_input,
+                                  const void* raw_label,
+                                  void* dst_input,
+                                  void* dst_label,
+                                  size_t batch_size);
+
     DatasetConfig config;     /**< Normalized configuration (allocator_fn/free_fn guaranteed valid) */
     size_t cursor = 0;            /**< Current sample index (advances with each batch) */
     size_t total_samples = 0;     /**< Total number of samples available in dataset */
 
     /** Transform function — default is identity (no-op). Called after next_batch_impl() when fetch_batch() returns OK. */
-    std::function<void(void*, void*, size_t)> transform_fn;
+    std::function<void(
+        const void* raw_input,   // raw dataset buffer from next_batch_impl
+        const void* raw_label,   // raw label buffer
+        void* dst_input,         // destination buffer provided to fetch_batch caller
+        void* dst_label,         // destination label buffer
+        size_t batch_size
+    )> transform_fn;
 };
