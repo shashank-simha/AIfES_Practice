@@ -176,11 +176,11 @@ void ClassificationModel::train(DatasetBase& ds,
             ds.fetch_batch(batch_size, input_buffer, target_idx);
 
             // Convert labels → one-hot
-            memset(target_onehot, 0, batch_size * config.output_shape[0] * sizeof(float));
+            memset(target_onehot, 0, batch_size * num_elements(config.output_shape) * sizeof(float));
             for (uint32_t i = 0; i < batch_size; i++) {
                 uint32_t cls = target_idx[i];
-                if (cls < config.output_shape[0]) {
-                    target_onehot[i * config.output_shape[0] + cls] = 1.0f;
+                if (cls < num_elements(config.output_shape)) {
+                    target_onehot[i * num_elements(config.output_shape) + cls] = 1.0f;
                 }
             }
 
