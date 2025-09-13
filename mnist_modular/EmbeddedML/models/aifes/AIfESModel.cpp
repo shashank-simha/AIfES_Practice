@@ -191,53 +191,70 @@ bool AIfESModel::store_model_parameters() {
     if (adapter->rename(tmp_path, params_file_path)) {
         replaced = true;
     } else {
-        LOG_WARN("AIfESModel: Rename failed, falling back to writing original file directly...");
+        LOG_WARN("AIfESModel: Rename failed, attempting to remove original and retry...");
 
-        // Write parameters directly to original file
-        if (!adapter->open(params_file_path, FileAdapter::OpenMode::WRITE)) {
-            LOG_ERROR("AIfESModel: Failed to open original file for writing in fallback");
-            if (adapter->remove(tmp_path)) {
-                LOG_WARN("AIfESModel: Temp file removed after fallback failure");
+        // --- Try removing original file if supported ---
+        if (adapter->remove(params_file_path)) {
+            LOG_INFO("AIfESModel: Original file removed, retrying rename...");
+            if (adapter->rename(tmp_path, params_file_path)) {
+                replaced = true;
+                LOG_INFO("AIfESModel: Temp file successfully renamed after removing original");
+            } else {
+                LOG_WARN("AIfESModel: Rename still failed after removing original");
             }
-            return false;
+        } else {
+            LOG_WARN("AIfESModel: Could not remove original file, will fallback to direct write");
         }
 
-        // --- Reuse same tensor write loop for original file ---
-        current = model.input_layer;
-        while (current) {
-            for (int p = 0; p < current->trainable_params_count; ++p) {
-                aitensor_t* tensor = current->trainable_params[p];
-                if (!tensor || !tensor->data) continue;
+        // --- Fallback: write parameters directly to original file if rename still failed ---
+        if (!replaced) {
+            LOG_WARN("AIfESModel: Falling back to writing original file directly...");
 
-                uint32_t total_elements = 1;
-                for (uint8_t d = 0; d < tensor->dim; ++d) {
-                    total_elements *= tensor->shape[d];
+            if (!adapter->open(params_file_path, FileAdapter::OpenMode::WRITE)) {
+                LOG_ERROR("AIfESModel: Failed to open original file for writing in fallback");
+                if (adapter->remove(tmp_path)) {
+                    LOG_WARN("AIfESModel: Temp file removed after fallback failure");
                 }
+                return false;
+            }
 
-                size_t bytes = static_cast<size_t>(total_elements) * sizeof(float);
-                size_t written = 0;
-                const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(tensor->data);
-                const size_t CHUNK_SIZE = 1024;
+            // --- Reuse same tensor write loop for original file ---
+            current = model.input_layer;
+            while (current) {
+                for (int p = 0; p < current->trainable_params_count; ++p) {
+                    aitensor_t* tensor = current->trainable_params[p];
+                    if (!tensor || !tensor->data) continue;
 
-                while (written < bytes) {
-                    size_t to_write = std::min(CHUNK_SIZE, bytes - written);
-                    size_t ret = adapter->write(data_ptr + written, to_write);
-                    if (ret != to_write) {
-                        LOG_ERROR("AIfESModel: Write error during fallback (got %u, expected %u)",
-                                  (unsigned)ret, (unsigned)to_write);
-                        adapter->close();
-                        return false;
+                    uint32_t total_elements = 1;
+                    for (uint8_t d = 0; d < tensor->dim; ++d) {
+                        total_elements *= tensor->shape[d];
                     }
-                    written += ret;
+
+                    size_t bytes = static_cast<size_t>(total_elements) * sizeof(float);
+                    size_t written = 0;
+                    const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(tensor->data);
+                    const size_t CHUNK_SIZE = 1024;
+
+                    while (written < bytes) {
+                        size_t to_write = std::min(CHUNK_SIZE, bytes - written);
+                        size_t ret = adapter->write(data_ptr + written, to_write);
+                        if (ret != to_write) {
+                            LOG_ERROR("AIfESModel: Write error during fallback (got %u, expected %u)",
+                                    (unsigned)ret, (unsigned)to_write);
+                            adapter->close();
+                            return false;
+                        }
+                        written += ret;
+                    }
                 }
+
+                if (current == model.output_layer) break;
+                current = current->output_layer;
             }
 
-            if (current == model.output_layer) break;
-            current = current->output_layer;
+            adapter->close();
+            replaced = true;
         }
-
-        adapter->close();
-        replaced = true;
     }
 
     if (!replaced) {
