@@ -6,6 +6,7 @@
 #include "EmbeddedML/ModelHub/aifes/mnist/MNISTModel.h"
 #include "EmbeddedML/datasets/SDCardDataset.h"
 #include "EmbeddedML/adapters/SDMMCFileAdapter.h"
+#include "EmbeddedML/adapters/SPIFFSFileAdapter.h"
 #include "EmbeddedML/utils/logger.h"
 
 // Explicitly include .cpp files to ensure compilation
@@ -96,6 +97,10 @@ void setup() {
         while (1);
     }
 
+    if (!SPIFFS.begin(false)) {
+        Serial.println("SPIFFS Mount Failed, continuing with current parameters");
+    }
+
     // --- Build dataset config ---
     DatasetConfig db_cfg;
     db_cfg.input_shape = {1, 28, 28};
@@ -119,7 +124,7 @@ void setup() {
     model_cfg.allocator_fn = ps_malloc;
     model_cfg.free_fn = free;
 
-    model = new MNISTModel(model_cfg, "/params.bin", new SDMMCFileAdapter());
+    model = new MNISTModel(model_cfg, "/params.bin", new SPIFFSFileAdapter());
     model->init();
     Serial.println("Model initialized");
 
