@@ -60,7 +60,7 @@ Below is the layer-by-layer structure with shapes and parameters:
 | 6  | **ReLU**   | Activation                                    | `[1, 8, 14, 14]`   |
 | 7  | **MaxPool**| Pool: (2×2), Stride: (2,2), Padding: (0, 0)   | `[1, 8, 7, 7]`     |
 | 8  | **Flatten**| Reshape                                       | `[1, 392]`          |
-| 9  | **Dense**  | Neurons: 64                                   | `[1, 32]`           |
+| 9  | **Dense**  | Neurons: 32                                   | `[1, 32]`           |
 | 10 | **ReLU**   | Activation                                    | `[1, 32]`           |
 | 11 | **Dense**  | Neurons: 10                                   | `[1, 10]`           |
 | 12 | **Softmax**| Classification output                         | `[1, 10]`           |
