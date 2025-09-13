@@ -95,14 +95,14 @@ bool AIfESModel::load_model_parameters() {
 
     LOG_INFO("AIfESModel: Loading model parameters from %s", params_file_path);
     if (!adapter->open(params_file_path, FileAdapter::OpenMode::READ)) {
-        LOG_INFO("AIfESModel: No saved parameters found, using defaults");
+        LOG_INFO("AIfESModel: No saved parameters found, skipping load");
         return true;
     }
 
     size_t expected_bytes = aialgo_sizeof_parameter_memory(&model);
     size_t actual_bytes = adapter->size();
     if (actual_bytes != expected_bytes) {
-        LOG_WARN("AIfESModel: Parameter file size mismatch (expected=%u, actual=%u)",
+        LOG_WARN("AIfESModel: Parameter file size mismatch (expected=%u, actual=%u), skipping load",
                  (unsigned)expected_bytes, (unsigned)actual_bytes);
         adapter->close();
         return true;
@@ -138,6 +138,7 @@ bool AIfESModel::store_model_parameters() {
     char tmp_path[256];
     std::snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", params_file_path);
 
+    // --- Attempt to write to temp file ---
     if (!adapter->open(tmp_path, FileAdapter::OpenMode::WRITE)) {
         LOG_ERROR("AIfESModel: Failed to open temp file for writing");
         return false;
@@ -146,6 +147,7 @@ bool AIfESModel::store_model_parameters() {
     ailayer_t* current = model.input_layer;
     size_t total_bytes_written = 0;
 
+    // --- Write all trainable parameters to temp ---
     while (current) {
         for (int p = 0; p < current->trainable_params_count; ++p) {
             aitensor_t* tensor = current->trainable_params[p];
@@ -168,7 +170,9 @@ bool AIfESModel::store_model_parameters() {
                     LOG_ERROR("AIfESModel: Write error (got %u, expected %u)",
                               (unsigned)ret, (unsigned)to_write);
                     adapter->close();
-                    adapter->remove(tmp_path);
+                    if (adapter->remove(tmp_path)) {
+                        LOG_WARN("AIfESModel: Temp file removed after write failure");
+                    }
                     return false;
                 }
                 written += ret;
@@ -181,10 +185,66 @@ bool AIfESModel::store_model_parameters() {
     }
 
     adapter->close();
-    adapter->remove(params_file_path);
-    if (!adapter->rename(tmp_path, params_file_path)) {
-        LOG_ERROR("AIfESModel: Failed to rename temp file");
-        adapter->remove(tmp_path);
+
+    // --- Attempt to rename temp to original ---
+    bool replaced = false;
+    if (adapter->rename(tmp_path, params_file_path)) {
+        replaced = true;
+    } else {
+        LOG_WARN("AIfESModel: Rename failed, falling back to writing original file directly...");
+
+        // Write parameters directly to original file
+        if (!adapter->open(params_file_path, FileAdapter::OpenMode::WRITE)) {
+            LOG_ERROR("AIfESModel: Failed to open original file for writing in fallback");
+            if (adapter->remove(tmp_path)) {
+                LOG_WARN("AIfESModel: Temp file removed after fallback failure");
+            }
+            return false;
+        }
+
+        // --- Reuse same tensor write loop for original file ---
+        current = model.input_layer;
+        while (current) {
+            for (int p = 0; p < current->trainable_params_count; ++p) {
+                aitensor_t* tensor = current->trainable_params[p];
+                if (!tensor || !tensor->data) continue;
+
+                uint32_t total_elements = 1;
+                for (uint8_t d = 0; d < tensor->dim; ++d) {
+                    total_elements *= tensor->shape[d];
+                }
+
+                size_t bytes = static_cast<size_t>(total_elements) * sizeof(float);
+                size_t written = 0;
+                const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(tensor->data);
+                const size_t CHUNK_SIZE = 1024;
+
+                while (written < bytes) {
+                    size_t to_write = std::min(CHUNK_SIZE, bytes - written);
+                    size_t ret = adapter->write(data_ptr + written, to_write);
+                    if (ret != to_write) {
+                        LOG_ERROR("AIfESModel: Write error during fallback (got %u, expected %u)",
+                                  (unsigned)ret, (unsigned)to_write);
+                        adapter->close();
+                        return false;
+                    }
+                    written += ret;
+                }
+            }
+
+            if (current == model.output_layer) break;
+            current = current->output_layer;
+        }
+
+        adapter->close();
+        replaced = true;
+    }
+
+    if (!replaced) {
+        LOG_ERROR("AIfESModel: Failed to store parameters");
+        if (adapter->remove(tmp_path)) {
+            LOG_WARN("AIfESModel: Temp file removed after failure");
+        }
         return false;
     }
 
