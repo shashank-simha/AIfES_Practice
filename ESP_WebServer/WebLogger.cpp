@@ -15,10 +15,10 @@ String WebLogger::getLoggerUI() {
   </div>
   <script>
   var ws = new WebSocket('ws://' + location.hostname + '/ws');
-  ws.onmessage = function(event) { 
+  ws.onmessage = function(event) {
     var log = document.getElementById('log');
     var isAtBottom = Math.abs(log.scrollHeight - log.scrollTop - log.clientHeight) < 1;
-    log.innerHTML += event.data + '\n'; 
+    log.innerHTML += event.data + '\n';
     if (isAtBottom) log.scrollTop = log.scrollHeight;
   };
   </script></body></html>)rawliteral";
